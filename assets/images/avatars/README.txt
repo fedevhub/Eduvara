@@ -1,0 +1,1 @@
+Place avatar assets here.

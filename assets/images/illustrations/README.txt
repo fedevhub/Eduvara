@@ -1,0 +1,1 @@
+Place illustration assets here.
