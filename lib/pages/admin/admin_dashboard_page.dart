@@ -106,7 +106,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 ),
               ),
 
-              // Ikon notifikasi di sebelah kiri avatar.
               _NotificationButton(
                 count: _unreadNotifications,
                 onTap: _openNotifications,
@@ -184,7 +183,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Menggunakan data kursus dummy yang tersedia.
                   for (final course in mockCourses)
                     _Rate(course.title, course.percent),
                 ],

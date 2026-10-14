@@ -230,7 +230,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
             FormCard(
               children: [
-                // Nama course
                 const FieldLabel('Nama Course', required: true),
 
                 EduField(
@@ -241,7 +240,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                 _errorText(nameError),
 
-                // Mata pelajaran
                 const FieldLabel('Mata Pelajaran', required: true),
 
                 SearchableSelect(
@@ -267,7 +265,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                 _errorText(subjectError),
 
-                // Deskripsi
                 const FieldLabel('Deskripsi'),
 
                 EduField(
@@ -276,7 +273,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                   maxLines: 3,
                 ),
 
-                // Tingkat kelas
                 const FieldLabel('Tingkat Kelas', required: true),
 
                 EduSelect(
@@ -300,7 +296,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                 _errorText(levelError),
 
-                // Guru pengajar
                 const FieldLabel('Guru Pengajar', required: true),
 
                 SearchableSelect(
@@ -323,7 +318,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                 _errorText(teacherError),
 
-                // Pilih siswa
                 const FieldLabel('Pilih Siswa', required: true),
 
                 if (availableStudents.isEmpty)
@@ -412,7 +406,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                 _errorText(availableStudents.isEmpty ? null : studentsError),
 
-                // Status
                 const FieldLabel('Status', required: true),
 
                 StatusRadio(

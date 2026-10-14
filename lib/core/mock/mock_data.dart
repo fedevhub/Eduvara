@@ -16,7 +16,6 @@ class MockUser {
   ]);
 }
 
-// Data sementara: bisa berubah selama aplikasi berjalan.
 final List<MockUser> mockSiswa = [
   const MockUser(
     'Fitri Rachmania',

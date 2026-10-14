@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 
-/// Halaman "Setting" admin.
 class AdminProfilePage extends StatelessWidget {
   const AdminProfilePage({super.key});
 

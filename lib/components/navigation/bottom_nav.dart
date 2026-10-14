@@ -49,7 +49,6 @@ class BottomNav extends StatelessWidget {
   );
 }
 
-/// Bottom navigation shared by every primary page for a role.
 class RoleBottomNav extends StatelessWidget {
   final String role;
   final int currentIndex;

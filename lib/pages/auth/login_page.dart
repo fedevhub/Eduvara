@@ -23,7 +23,6 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
-  /// Versi ini khusus Admin (mock): semua login masuk sebagai admin.
   Future<void> _submit(AuthProvider auth) async {
     await auth.login(
       email.text.isEmpty ? 'admin' : email.text,

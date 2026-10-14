@@ -1,7 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 
-/// Design tokens yang diambil dari desain Figma Eduvara.
 class Ui {
   static const bg = Color(0xFFF8FAFC);
   static const blue = Color(0xFF2563EB);
@@ -38,7 +37,6 @@ class Ui {
   );
 }
 
-/// Kartu putih dengan bayangan lembut.
 class EduCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -77,7 +75,6 @@ class EduCard extends StatelessWidget {
   );
 }
 
-/// Scaffold standar halaman Eduvara.
 class EduScaffold extends StatelessWidget {
   final Widget body;
   final Widget? bottom;
@@ -207,7 +204,6 @@ class Pill extends StatelessWidget {
   }
 }
 
-/// Tab segmented (Siswa / Guru / Admin, Course / Quiz).
 class SegTabs extends StatelessWidget {
   final List<String> labels;
   final int index;
@@ -257,7 +253,6 @@ class SegTabs extends StatelessWidget {
   );
 }
 
-/// Chip filter (Semua / Aktif / Nonaktif).
 class FilterChips extends StatelessWidget {
   final List<String> labels;
   final int index;
@@ -337,7 +332,6 @@ class SearchBox extends StatelessWidget {
   );
 }
 
-/// Tombol lembut (Edit biru, Nonaktifkan kuning, Hapus merah).
 class SoftBtn extends StatelessWidget {
   final String label;
   final IconData? icon;
@@ -399,7 +393,6 @@ class SoftBtn extends StatelessWidget {
   );
 }
 
-/// Tombol solid (navy / hijau / biru / abu).
 class SolidBtn extends StatelessWidget {
   final String label;
   final VoidCallback? onTap;
@@ -481,7 +474,6 @@ class ProgressLine extends StatelessWidget {
   );
 }
 
-/// Kotak statistik angka besar biru + label.
 class StatBox extends StatelessWidget {
   final String value;
   final String label;
@@ -527,7 +519,6 @@ class StatBox extends StatelessWidget {
   );
 }
 
-/// Kartu terkunci: konten blur + gembok + teks.
 class LockedCard extends StatelessWidget {
   final Widget child;
   final String text;
@@ -587,8 +578,6 @@ class EduFooter extends StatelessWidget {
     ),
   );
 }
-
-// ───────────────────────── Dialog ─────────────────────────
 
 Future<bool> showEduDialog(
   BuildContext context, {
@@ -703,8 +692,6 @@ Future<void> showSuccessDialog(BuildContext context, String message) =>
       primaryColor: Ui.green,
       secondary: null,
     );
-
-// ───────────────────────── Form ─────────────────────────
 
 class FormCard extends StatelessWidget {
   final List<Widget> children;
@@ -858,7 +845,6 @@ class EduSelect extends StatelessWidget {
   }
 }
 
-/// Radio Aktif / Nonaktif.
 class StatusRadio extends StatelessWidget {
   final bool active;
   final ValueChanged<bool> onChanged;
@@ -888,8 +874,6 @@ class StatusRadio extends StatelessWidget {
     ),
   );
 }
-
-// ───────────────────────── Bottom nav ─────────────────────────
 
 class _NavItem {
   final IconData icon;
