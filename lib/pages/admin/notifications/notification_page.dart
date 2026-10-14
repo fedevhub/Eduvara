@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../components/navigation/app_bar.dart';
-import '../../../components/navigation/bottom_nav.dart';
 import '../../../components/cards/notification_card.dart';
 import '../../../models/notification_model.dart';
 import '../../../repositories/notification_repository.dart';
@@ -49,7 +48,7 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const EduvaraAppBar(title: 'Notifikasi'),
+      appBar: const EduvaraAppBar(title: 'Notifikasi', showBack: true),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _notifications.isEmpty
@@ -62,7 +61,6 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
                 return NotificationCard(notification: _notifications[index]);
               },
             ),
-      bottomNavigationBar: const RoleBottomNav(role: 'admin', currentIndex: 3),
     );
   }
 }

@@ -7,8 +7,7 @@ class AdminCourseFormPage extends StatefulWidget {
   const AdminCourseFormPage({super.key});
 
   @override
-  State<AdminCourseFormPage> createState() =>
-      _AdminCourseFormPageState();
+  State<AdminCourseFormPage> createState() => _AdminCourseFormPageState();
 }
 
 class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
@@ -24,6 +23,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   bool active = true;
   bool _init = false;
   bool _showErrors = false;
+  String _studentQuery = '';
 
   final Set<String> selectedStudents = {};
 
@@ -34,6 +34,17 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   List<MockUser> get availableStudents =>
       mockSiswa.where((user) => user.active).toList();
+
+  List<MockUser> get filteredStudents {
+    final query = _studentQuery.trim().toLowerCase();
+    if (query.isEmpty) return availableStudents;
+
+    return availableStudents.where((user) {
+      return user.name.toLowerCase().contains(query) ||
+          user.email.toLowerCase().contains(query) ||
+          user.info.toLowerCase().contains(query);
+    }).toList();
+  }
 
   @override
   void initState() {
@@ -136,10 +147,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
       padding: const EdgeInsets.only(top: 3, bottom: 3),
       child: Text(
         message,
-        style: const TextStyle(
-          color: Colors.red,
-          fontSize: 11,
-        ),
+        style: const TextStyle(color: Colors.red, fontSize: 11),
       ),
     );
   }
@@ -149,7 +157,8 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
       _showErrors = true;
     });
 
-    final hasError = _validateName() != null ||
+    final hasError =
+        _validateName() != null ||
         _validateLevel() != null ||
         _validateSubject() != null ||
         _validateTeacher() != null ||
@@ -214,10 +223,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
             Text(
               edit ? 'Edit Course' : 'Tambah Course',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
 
             const SizedBox(height: 12),
@@ -238,7 +244,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                 // Mata pelajaran
                 const FieldLabel('Mata Pelajaran', required: true),
 
-                EduSelect(
+                SearchableSelect(
                   hint: 'Pilih mata pelajaran',
                   value: subject,
                   items: const [
@@ -250,7 +256,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                     'Ilmu Pengetahuan Alam',
                     'Ilmu Pengetahuan Sosial',
                     'Bahasa Inggris',
-                    'Agama',
                   ],
                   error: _showErrors && subjectError != null,
                   onChanged: (value) {
@@ -276,19 +281,19 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                 EduSelect(
                   hint: 'Pilih tingkat kelas',
-                  value: subject,
+                  value: level.text.isEmpty ? null : level.text,
                   items: const [
                     'Kelas 7',
                     'Kelas 8',
-                    'kelas 9',
+                    'Kelas 9',
                     'Kelas 10',
                     'Kelas 11',
                     'Kelas 12',
                   ],
-                  error: _showErrors && subjectError != null,
+                  error: _showErrors && levelError != null,
                   onChanged: (value) {
                     setState(() {
-                      subject = value;
+                      level.text = value ?? '';
                     });
                   },
                 ),
@@ -298,12 +303,16 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                 // Guru pengajar
                 const FieldLabel('Guru Pengajar', required: true),
 
-                EduSelect(
+                SearchableSelect(
                   hint: 'Pilih guru pengajar',
                   value: teacher,
-                  items: availableTeachers
-                      .map((user) => user.name)
-                      .toList(),
+                  items: availableTeachers.map((user) => user.name).toList(),
+                  subtitle: (name) {
+                    final selectedTeacher = availableTeachers.firstWhere(
+                      (user) => user.name == name,
+                    );
+                    return '${selectedTeacher.info}';
+                  },
                   error: _showErrors && teacherError != null,
                   onChanged: (value) {
                     setState(() {
@@ -320,10 +329,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                 if (availableStudents.isEmpty)
                   const Text(
                     'Belum ada siswa aktif. Tambahkan siswa terlebih dahulu.',
-                    style: TextStyle(
-                      color: Ui.muted,
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: Ui.muted, fontSize: 11),
                   )
                 else
                   Container(
@@ -334,9 +340,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                         color: _showErrors && studentsError != null
                             ? Ui.red
                             : Ui.line,
-                        width: _showErrors && studentsError != null
-                            ? 1.3
-                            : 1,
+                        width: _showErrors && studentsError != null ? 1.3 : 1,
                       ),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -351,40 +355,62 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                           ),
                         ),
 
+                        const SizedBox(height: 8),
+
+                        TextField(
+                          onChanged: (value) {
+                            setState(() => _studentQuery = value);
+                          },
+                          style: const TextStyle(fontSize: 11),
+                          decoration: const InputDecoration(
+                            hintText: 'Cari nama, email, atau kelas siswa',
+                            hintStyle: TextStyle(fontSize: 10),
+                            prefixIcon: Icon(Icons.search, size: 18),
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+
                         const SizedBox(height: 6),
 
-                        for (final user in availableStudents)
-                          CheckboxListTile(
-                            value: selectedStudents.contains(user.name),
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity:
-                                ListTileControlAffinity.leading,
-                            title: Text(
-                              user.name,
-                              style: const TextStyle(fontSize: 11),
+                        if (filteredStudents.isEmpty)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8),
+                            child: Text(
+                              'Siswa tidak ditemukan.',
+                              style: TextStyle(fontSize: 11, color: Ui.muted),
                             ),
-                            subtitle: Text(
-                              '${user.email} • ${user.info}',
-                              style: const TextStyle(fontSize: 9),
+                          )
+                        else
+                          for (final user in filteredStudents)
+                            CheckboxListTile(
+                              value: selectedStudents.contains(user.name),
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(
+                                user.name,
+                                style: const TextStyle(fontSize: 11),
+                              ),
+                              subtitle: Text(
+                                '${user.email} • ${user.info}',
+                                style: const TextStyle(fontSize: 9),
+                              ),
+                              onChanged: (checked) {
+                                setState(() {
+                                  if (checked == true) {
+                                    selectedStudents.add(user.name);
+                                  } else {
+                                    selectedStudents.remove(user.name);
+                                  }
+                                });
+                              },
                             ),
-                            onChanged: (checked) {
-                              setState(() {
-                                if (checked == true) {
-                                  selectedStudents.add(user.name);
-                                } else {
-                                  selectedStudents.remove(user.name);
-                                }
-                              });
-                            },
-                          ),
                       ],
                     ),
                   ),
 
-                _errorText(
-                  availableStudents.isEmpty ? null : studentsError,
-                ),
+                _errorText(availableStudents.isEmpty ? null : studentsError),
 
                 // Status
                 const FieldLabel('Status', required: true),
@@ -417,3 +443,157 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   }
 }
 
+class SearchableSelect extends StatelessWidget {
+  final String hint;
+  final List<String> items;
+  final String? value;
+  final ValueChanged<String?> onChanged;
+  final String? Function(String item)? subtitle;
+  final bool error;
+
+  const SearchableSelect({
+    super.key,
+    required this.hint,
+    required this.items,
+    required this.value,
+    required this.onChanged,
+    this.subtitle,
+    this.error = false,
+  });
+
+  Future<void> _showOptions(BuildContext context) async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _SearchableOptionsSheet(
+        title: hint,
+        items: items,
+        subtitle: subtitle,
+        selectedValue: value,
+      ),
+    );
+
+    if (selected != null) onChanged(selected);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = error ? Ui.red : Ui.line;
+
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: () => _showOptions(context),
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          decoration: BoxDecoration(
+            border: Border.all(color: borderColor, width: error ? 1.3 : 1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  value ?? hint,
+                  style: TextStyle(
+                    fontSize: value == null ? 11 : 12,
+                    color: value == null ? const Color(0xFFB6BFCC) : Ui.text,
+                  ),
+                ),
+              ),
+              const Icon(Icons.keyboard_arrow_down, size: 18, color: Ui.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SearchableOptionsSheet extends StatefulWidget {
+  final String title;
+  final List<String> items;
+  final String? Function(String item)? subtitle;
+  final String? selectedValue;
+
+  const _SearchableOptionsSheet({
+    required this.title,
+    required this.items,
+    required this.subtitle,
+    required this.selectedValue,
+  });
+
+  @override
+  State<_SearchableOptionsSheet> createState() =>
+      _SearchableOptionsSheetState();
+}
+
+class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
+  String query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final normalizedQuery = query.trim().toLowerCase();
+    final filteredItems = widget.items.where((item) {
+      final detail = widget.subtitle?.call(item) ?? '';
+      return item.toLowerCase().contains(normalizedQuery) ||
+          detail.toLowerCase().contains(normalizedQuery);
+    }).toList();
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          left: 20,
+          right: 20,
+          top: 16,
+          bottom: MediaQuery.viewInsetsOf(context).bottom + 16,
+        ),
+        child: SizedBox(
+          height: MediaQuery.sizeOf(context).height * .65,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                autofocus: true,
+                onChanged: (value) => setState(() => query = value),
+                decoration: const InputDecoration(
+                  hintText: 'Cari pilihan',
+                  prefixIcon: Icon(Icons.search),
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: filteredItems.isEmpty
+                    ? const Center(child: Text('Pilihan tidak ditemukan.'))
+                    : ListView.builder(
+                        itemCount: filteredItems.length,
+                        itemBuilder: (context, index) {
+                          final item = filteredItems[index];
+                          final detail = widget.subtitle?.call(item);
+                          return ListTile(
+                            title: Text(item),
+                            subtitle: detail == null ? null : Text(detail),
+                            trailing: item == widget.selectedValue
+                                ? const Icon(Icons.check, color: Ui.blue)
+                                : null,
+                            onTap: () => Navigator.pop(context, item),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
