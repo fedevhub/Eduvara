@@ -2,6 +2,7 @@ class RouteNames {
   static const splash = '/';
   static const login = '/login';
 
+  //Admin
   static const adminDashboard = '/admin/dashboard';
   static const adminCourses = '/admin/courses';
   static const adminCourseDetail = '/admin/courses/detail';
@@ -18,4 +19,10 @@ class RouteNames {
   static const adminQuestionForm = '/admin/quizzes/questions/form';
   static const adminNotifications = '/admin/notifications';
   static const adminProfile = '/admin/profile';
+  
+  //Student
+  static const studentCourses = '/student/courses';
+  static const studentCourseDetail = '/student/courses/detail';
+  static const studentMaterialDetail = '/student/materials/detail';
+  static const studentQuiz = '/student/quiz';
 }
