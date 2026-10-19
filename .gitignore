@@ -1,3 +1,9 @@
+# Supabase / API keys / secrets
+lib/core/config/supabase_config.dart
+.env
+.env.*
+*.env
+
 # Miscellaneous
 *.class
 *.log

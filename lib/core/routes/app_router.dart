@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../pages/auth/login_page.dart';
 import '../../pages/auth/splash_page.dart';
+
 import '../../pages/admin/admin_dashboard_page.dart';
 import '../../pages/admin/courses/course_detail_page.dart';
 import '../../pages/admin/courses/course_form_page.dart';
@@ -17,15 +19,32 @@ import '../../pages/admin/quizzes/quiz_list_page.dart';
 import '../../pages/admin/users/user_detail_page.dart';
 import '../../pages/admin/users/user_form_page.dart';
 import '../../pages/admin/users/user_list_page.dart';
+
+// Dashboard yang sudah ada
+import '../../pages/student/student_dashboard_page.dart';
+import '../../pages/student/courses/course_detail_page.dart';
+import '../../pages/student/courses/material_detail_page.dart';
+import '../../pages/student/courses/student_courses_page.dart';
+import '../../pages/student/quizzes/question_page.dart';
+import '../../pages/student/quizzes/quiz_page.dart';
+import '../../pages/teacher/teacher_dashboard_page.dart';
+
 import 'route_names.dart';
 
 class AppRouter {
-  static Route<dynamic> onGenerateRoute(RouteSettings settings) =>
-      MaterialPageRoute(settings: settings, builder: (_) => _pageFor(settings.name));
+  static Route<dynamic> onGenerateRoute(RouteSettings settings) {
+    return MaterialPageRoute(
+      settings: settings,
+      builder: (_) => _pageFor(settings.name),
+    );
+  }
 
   static Widget _pageFor(String? routeName) => switch (routeName) {
+    // General
     RouteNames.splash => const SplashPage(),
     RouteNames.login => const LoginPage(),
+
+    // Admin
     RouteNames.adminDashboard => const AdminDashboardPage(),
     RouteNames.adminCourses => const CourseListPage(),
     RouteNames.adminCourseDetail => const AdminCourseDetailPage(),
@@ -42,6 +61,18 @@ class AppRouter {
     RouteNames.adminQuestionForm => const AdminQuestionFormPage(),
     RouteNames.adminNotifications => const AdminNotificationPage(),
     RouteNames.adminProfile => const AdminProfilePage(),
+
+    // Teacher
+    RouteNames.teacherDashboard => const TeacherDashboardPage(),
+
+    // Student
+    RouteNames.studentDashboard => const StudentDashboardPage(),
+    RouteNames.studentCourses => const StudentCoursesPage(),
+    RouteNames.studentCourseDetail => const StudentCourseDetailPage(),
+    RouteNames.studentMaterialDetail => const StudentMaterialDetailPage(),
+    RouteNames.studentQuiz => const QuizPage(),
+    RouteNames.studentQuestion => const QuestionPage(),
+
     _ => const _UnknownRoutePage(),
   };
 }

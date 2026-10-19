@@ -24,32 +24,56 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _submit(AuthProvider auth) async {
-    await auth.login(
-      email.text.isEmpty ? 'admin' : email.text,
-      password.text.isEmpty ? '123456' : password.text,
-      'admin',
-    );
+    final emailValue = email.text.trim();
+    final passwordValue = password.text;
+
+    if (emailValue.isEmpty || passwordValue.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email dan password wajib diisi.')),
+      );
+      return;
+    }
+
+    final success = await auth.login(emailValue, passwordValue);
+
     if (!mounted) return;
-    Navigator.pushReplacementNamed(context, RouteNames.adminDashboard);
+
+    if (!success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(auth.errorMessage ?? 'Login gagal.')),
+      );
+      return;
+    }
+
+    final role = auth.user!.role;
+
+    Navigator.pushNamedAndRemoveUntil(
+      context,
+      RouteNames.dashboardForRole(role),
+      (route) => false,
+    );
   }
 
-  Widget _fieldBox({required IconData icon, required Widget child, Widget? end}) =>
-      Container(
-        height: 38,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFE9EDF3),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, size: 16, color: Ui.navy),
-            const SizedBox(width: 10),
-            Expanded(child: child),
-            if (end != null) end,
-          ],
-        ),
-      );
+  Widget _fieldBox({
+    required IconData icon,
+    required Widget child,
+    Widget? end,
+  }) => Container(
+    height: 38,
+    padding: const EdgeInsets.symmetric(horizontal: 12),
+    decoration: BoxDecoration(
+      color: const Color(0xFFE9EDF3),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      children: [
+        Icon(icon, size: 16, color: Ui.navy),
+        const SizedBox(width: 10),
+        Expanded(child: child),
+        if (end != null) end,
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => Scaffold(
