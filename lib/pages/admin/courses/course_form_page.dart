@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../components/ui/kit.dart';
-import '../../../core/mock/mock_data.dart';
 
 class AdminCourseFormPage extends StatefulWidget {
   const AdminCourseFormPage({super.key});
@@ -12,37 +12,72 @@ class AdminCourseFormPage extends StatefulWidget {
 
 class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   final _formKey = GlobalKey<FormState>();
+  final SupabaseClient _db = Supabase.instance.client;
 
   final name = TextEditingController();
   final desc = TextEditingController();
   final level = TextEditingController();
 
+  // Pilihan tetap form (bukan data transaksi), jadi tidak butuh tabel.
+  static const List<String> _baseSubjects = [
+    'Matematika',
+    'Bahasa Indonesia',
+    'KIK',
+    'Agama',
+    'Pendidikan Pancasila / Kewarganegaraan',
+    'Ilmu Pengetahuan Alam',
+    'Ilmu Pengetahuan Sosial',
+    'Bahasa Inggris',
+  ];
+
+  static const List<String> _baseLevels = [
+    'Kelas 7',
+    'Kelas 8',
+    'Kelas 9',
+    'Kelas 10',
+    'Kelas 11',
+    'Kelas 12',
+  ];
+
+  List<String> _subjects = List.of(_baseSubjects);
+  List<String> _levels = List.of(_baseLevels);
+
   String? subject;
-  String? teacher;
+  String? teacherId;
+  String? _editingCourseId;
 
   bool active = true;
   bool _init = false;
   bool _showErrors = false;
+  bool _loading = true;
+  bool _saving = false;
   String _studentQuery = '';
 
   final Set<String> selectedStudents = {};
 
-  MockCourse? _editingCourse;
+  List<Map<String, dynamic>> _teachers = [];
+  List<Map<String, dynamic>> _students = [];
+  Map<String, dynamic>? _editingCourse;
 
-  List<MockUser> get availableTeachers =>
-      mockGuru.where((user) => user.active).toList();
+  List<Map<String, dynamic>> get availableTeachers => _teachers;
 
-  List<MockUser> get availableStudents =>
-      mockSiswa.where((user) => user.active).toList();
+  List<Map<String, dynamic>> get availableStudents => _students;
 
-  List<MockUser> get filteredStudents {
+  List<Map<String, dynamic>> get filteredStudents {
     final query = _studentQuery.trim().toLowerCase();
+
     if (query.isEmpty) return availableStudents;
 
     return availableStudents.where((user) {
-      return user.name.toLowerCase().contains(query) ||
-          user.email.toLowerCase().contains(query) ||
-          user.info.toLowerCase().contains(query);
+      final fullName =
+          (user['full_name'] ?? '').toString().toLowerCase();
+
+      final detail =
+          (user['class_name'] ?? user['grade_level'] ?? '')
+              .toString()
+              .toLowerCase();
+
+      return fullName.contains(query) || detail.contains(query);
     }).toList();
   }
 
@@ -67,28 +102,114 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     if (_init) return;
     _init = true;
 
+    // Page lain cukup mengirim id course (String) atau Map yang berisi 'id'.
+    // Data lengkapnya selalu diambil ulang dari Supabase.
     final arg = ModalRoute.of(context)?.settings.arguments;
 
-    if (arg is MockCourse) {
-      _editingCourse = arg;
+    if (arg is String && arg.isNotEmpty) {
+      _editingCourseId = arg;
+    } else if (arg is Map && arg['id'] != null) {
+      _editingCourseId = arg['id'].toString();
+    }
 
-      name.text = arg.title;
-      desc.text = arg.description;
-      level.text = arg.level;
-      subject = arg.subject;
-      active = arg.active;
+    _bootstrap();
+  }
 
-      if (availableTeachers.any((u) => u.name == arg.teacher)) {
-        teacher = arg.teacher;
+  Future<void> _bootstrap() async {
+    try {
+      final profiles = List<Map<String, dynamic>>.from(
+        await _db
+            .from('profiles')
+            .select('id, full_name, role, created_at')
+            .inFilter('role', ['teacher', 'student'])
+            .order('full_name'),
+      );
+
+      final subjects = List<String>.of(_baseSubjects);
+      final levels = List<String>.of(_baseLevels);
+
+      if (_editingCourseId != null) {
+        await _loadCourse();
+        await _loadCourseEnrollments();
       }
 
-      selectedStudents.addAll(
-        arg.studentNames.where(
-          (studentName) =>
-              availableStudents.any((user) => user.name == studentName),
-        ),
+      // Pastikan nilai course lama tetap muncul di pilihan.
+      if (level.text.isNotEmpty && !levels.contains(level.text)) {
+        levels.add(level.text);
+      }
+      if (subject != null && !subjects.contains(subject)) {
+        subjects.add(subject!);
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _teachers = profiles
+            .where((row) => (row['role'] ?? '').toString() == 'teacher')
+            .toList();
+
+        _students = profiles
+            .where((row) => (row['role'] ?? '').toString() == 'student')
+            .toList();
+
+        _subjects = subjects;
+        _levels = levels;
+
+        if (teacherId != null &&
+            !_teachers.any((user) => user['id'].toString() == teacherId)) {
+          teacherId = null;
+        }
+
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('[CourseForm] Gagal memuat data: $e');
+
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+
+      _showMessage(
+        'Gagal mengambil data dari Supabase. '
+        'Periksa tabel profiles, courses, enrollments, '
+        'dan kebijakan RLS.\n$e',
       );
     }
+  }
+
+  Future<void> _loadCourse() async {
+    final data = await _db
+        .from('courses')
+        .select()
+        .eq('id', _editingCourseId!)
+        .single();
+
+    _editingCourse = data;
+
+    name.text = (data['title'] ?? data['name'] ?? '').toString();
+    desc.text = (data['description'] ?? '').toString();
+    level.text = (data['grade_level'] ?? data['level'] ?? '').toString();
+    subject = data['subject']?.toString();
+    teacherId = (data['teacher_id'] ?? data['pengajar_id'])?.toString();
+
+    final status = data['status'];
+    active = status == true ||
+        status?.toString().toLowerCase() == 'active' ||
+        status?.toString().toLowerCase() == 'aktif';
+  }
+
+  Future<void> _loadCourseEnrollments() async {
+    final rows = await _db
+        .from('enrollments')
+        .select('student_id')
+        .eq('course_id', _editingCourseId!);
+
+    selectedStudents
+      ..clear()
+      ..addAll(
+        List<Map<String, dynamic>>.from(rows)
+            .map((row) => row['student_id'].toString()),
+      );
   }
 
   @override
@@ -107,6 +228,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     if (name.text.trim().isEmpty) {
       return 'Nama course wajib diisi';
     }
+
     return null;
   }
 
@@ -114,6 +236,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     if (level.text.trim().isEmpty) {
       return 'Tingkat kelas wajib diisi';
     }
+
     return null;
   }
 
@@ -121,13 +244,15 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     if (subject == null || subject!.isEmpty) {
       return 'Mata pelajaran wajib dipilih';
     }
+
     return null;
   }
 
   String? _validateTeacher() {
-    if (teacher == null || teacher!.isEmpty) {
+    if (teacherId == null || teacherId!.isEmpty) {
       return 'Guru pengajar wajib dipilih';
     }
+
     return null;
   }
 
@@ -135,6 +260,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     if (selectedStudents.isEmpty) {
       return 'Pilih minimal satu siswa';
     }
+
     return null;
   }
 
@@ -147,64 +273,125 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
       padding: const EdgeInsets.only(top: 3, bottom: 3),
       child: Text(
         message,
-        style: const TextStyle(color: Colors.red, fontSize: 11),
+        style: const TextStyle(
+          color: Colors.red,
+          fontSize: 11,
+        ),
       ),
     );
   }
 
-  Future<void> _saveCourse() async {
-    setState(() {
-      _showErrors = true;
-    });
+  void _showMessage(String message) {
+    if (!mounted) return;
 
-    final hasError =
-        _validateName() != null ||
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  Future<void> _saveCourse() async {
+    setState(() => _showErrors = true);
+
+    final hasError = _validateName() != null ||
         _validateLevel() != null ||
         _validateSubject() != null ||
         _validateTeacher() != null ||
         _validateStudents() != null;
 
-    if (hasError) return;
+    if (hasError || _saving) return;
 
-    final course = MockCourse(
-      name.text.trim(),
-      teacher!,
-      subject!,
-      selectedStudents.length,
-      _editingCourse?.percent ?? 0,
-      active,
-      description: desc.text.trim(),
-      level: level.text.trim(),
-      studentNames: selectedStudents.toList(),
-    );
+    setState(() => _saving = true);
 
-    if (_editingCourse == null) {
-      mockCourses.add(course);
-    } else {
-      final index = mockCourses.indexOf(_editingCourse!);
+    try {
+      final courseData = <String, dynamic>{
+        'title': name.text.trim(),
+        'subject': subject,
+        'description': desc.text.trim(),
+        'grade_level': level.text.trim(),
+        'teacher_id': teacherId,
+        'status': active ? 'active' : 'inactive',
+      };
 
-      if (index != -1) {
-        mockCourses[index] = course;
+      String courseId;
+
+      if (_editingCourseId == null) {
+        final inserted = await _db
+            .from('courses')
+            .insert(courseData)
+            .select('id')
+            .single();
+
+        courseId = inserted['id'].toString();
       } else {
-        mockCourses.add(course);
+        await _db
+            .from('courses')
+            .update(courseData)
+            .eq('id', _editingCourseId!);
+
+        courseId = _editingCourseId!;
+      }
+
+      // Sinkronkan siswa: hapus yang dilepas, tambah yang baru saja.
+      final existing = await _db
+          .from('enrollments')
+          .select('student_id')
+          .eq('course_id', courseId);
+
+      final existingIds = List<Map<String, dynamic>>.from(existing)
+          .map((row) => row['student_id'].toString())
+          .toSet();
+
+      final toRemove = existingIds.difference(selectedStudents).toList();
+      final toAdd = selectedStudents.difference(existingIds);
+
+      if (toRemove.isNotEmpty) {
+        await _db
+            .from('enrollments')
+            .delete()
+            .eq('course_id', courseId)
+            .inFilter('student_id', toRemove);
+      }
+
+      if (toAdd.isNotEmpty) {
+        await _db.from('enrollments').insert(
+              toAdd
+                  .map((id) => <String, dynamic>{
+                        'course_id': courseId,
+                        'student_id': id,
+                      })
+                  .toList(),
+            );
+      }
+
+      if (!mounted) return;
+
+      await showSuccessDialog(
+        context,
+        _editingCourseId == null
+            ? 'Course berhasil ditambahkan!'
+            : 'Course berhasil diperbarui!',
+      );
+
+      if (!mounted) return;
+
+      Navigator.pop(context, true);
+    } catch (e) {
+      debugPrint('[CourseForm] Gagal menyimpan course: $e');
+
+      _showMessage(
+        'Gagal menyimpan course ke Supabase. '
+        'Periksa nama kolom dan kebijakan RLS.\n$e',
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
       }
     }
-
-    await showSuccessDialog(
-      context,
-      _editingCourse == null
-          ? 'Course berhasil ditambahkan!'
-          : 'Course berhasil diperbarui!',
-    );
-
-    if (!mounted) return;
-
-    Navigator.pop(context, true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final edit = _editingCourse != null;
+    final edit = _editingCourseId != null;
 
     final nameError = _validateName();
     final levelError = _validateLevel();
@@ -223,208 +410,256 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
             Text(
               edit ? 'Edit Course' : 'Tambah Course',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
             ),
 
             const SizedBox(height: 12),
 
-            FormCard(
-              children: [
-                const FieldLabel('Nama Course', required: true),
-
-                EduField(
-                  controller: name,
-                  hint: 'Masukkan nama course',
-                  error: _showErrors && nameError != null,
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Center(
+                  child: CircularProgressIndicator(),
                 ),
-
-                _errorText(nameError),
-
-                const FieldLabel('Mata Pelajaran', required: true),
-
-                SearchableSelect(
-                  hint: 'Pilih mata pelajaran',
-                  value: subject,
-                  items: const [
-                    'Matematika',
-                    'Bahasa Indonesia',
-                    'KIK',
-                    'Agama',
-                    'Pendidikan Pancasila / Kewarganegaraan',
-                    'Ilmu Pengetahuan Alam',
-                    'Ilmu Pengetahuan Sosial',
-                    'Bahasa Inggris',
-                  ],
-                  error: _showErrors && subjectError != null,
-                  onChanged: (value) {
-                    setState(() {
-                      subject = value;
-                    });
-                  },
-                ),
-
-                _errorText(subjectError),
-
-                const FieldLabel('Deskripsi'),
-
-                EduField(
-                  controller: desc,
-                  hint: 'Masukkan deskripsi course',
-                  maxLines: 3,
-                ),
-
-                const FieldLabel('Tingkat Kelas', required: true),
-
-                EduSelect(
-                  hint: 'Pilih tingkat kelas',
-                  value: level.text.isEmpty ? null : level.text,
-                  items: const [
-                    'Kelas 7',
-                    'Kelas 8',
-                    'Kelas 9',
-                    'Kelas 10',
-                    'Kelas 11',
-                    'Kelas 12',
-                  ],
-                  error: _showErrors && levelError != null,
-                  onChanged: (value) {
-                    setState(() {
-                      level.text = value ?? '';
-                    });
-                  },
-                ),
-
-                _errorText(levelError),
-
-                const FieldLabel('Guru Pengajar', required: true),
-
-                SearchableSelect(
-                  hint: 'Pilih guru pengajar',
-                  value: teacher,
-                  items: availableTeachers.map((user) => user.name).toList(),
-                  subtitle: (name) {
-                    final selectedTeacher = availableTeachers.firstWhere(
-                      (user) => user.name == name,
-                    );
-                    return '${selectedTeacher.info}';
-                  },
-                  error: _showErrors && teacherError != null,
-                  onChanged: (value) {
-                    setState(() {
-                      teacher = value;
-                    });
-                  },
-                ),
-
-                _errorText(teacherError),
-
-                const FieldLabel('Pilih Siswa', required: true),
-
-                if (availableStudents.isEmpty)
-                  const Text(
-                    'Belum ada siswa aktif. Tambahkan siswa terlebih dahulu.',
-                    style: TextStyle(color: Ui.muted, fontSize: 11),
-                  )
-                else
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: _showErrors && studentsError != null
-                            ? Ui.red
-                            : Ui.line,
-                        width: _showErrors && studentsError != null ? 1.3 : 1,
-                      ),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '${selectedStudents.length} siswa dipilih',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-
-                        const SizedBox(height: 8),
-
-                        TextField(
-                          onChanged: (value) {
-                            setState(() => _studentQuery = value);
-                          },
-                          style: const TextStyle(fontSize: 11),
-                          decoration: const InputDecoration(
-                            hintText: 'Cari nama, email, atau kelas siswa',
-                            hintStyle: TextStyle(fontSize: 10),
-                            prefixIcon: Icon(Icons.search, size: 18),
-                            isDense: true,
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-
-                        const SizedBox(height: 6),
-
-                        if (filteredStudents.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: Text(
-                              'Siswa tidak ditemukan.',
-                              style: TextStyle(fontSize: 11, color: Ui.muted),
-                            ),
-                          )
-                        else
-                          for (final user in filteredStudents)
-                            CheckboxListTile(
-                              value: selectedStudents.contains(user.name),
-                              dense: true,
-                              contentPadding: EdgeInsets.zero,
-                              controlAffinity: ListTileControlAffinity.leading,
-                              title: Text(
-                                user.name,
-                                style: const TextStyle(fontSize: 11),
-                              ),
-                              subtitle: Text(
-                                '${user.email} • ${user.info}',
-                                style: const TextStyle(fontSize: 9),
-                              ),
-                              onChanged: (checked) {
-                                setState(() {
-                                  if (checked == true) {
-                                    selectedStudents.add(user.name);
-                                  } else {
-                                    selectedStudents.remove(user.name);
-                                  }
-                                });
-                              },
-                            ),
-                      ],
-                    ),
+              )
+            else
+              FormCard(
+                children: [
+                  const FieldLabel(
+                    'Nama Course',
+                    required: true,
                   ),
 
-                _errorText(availableStudents.isEmpty ? null : studentsError),
+                  EduField(
+                    controller: name,
+                    hint: 'Masukkan nama course',
+                    error: _showErrors && nameError != null,
+                  ),
 
-                const FieldLabel('Status', required: true),
+                  _errorText(nameError),
 
-                StatusRadio(
-                  active: active,
-                  onChanged: (value) {
-                    setState(() {
-                      active = value;
-                    });
-                  },
-                ),
+                  const FieldLabel(
+                    'Mata Pelajaran',
+                    required: true,
+                  ),
 
-                const SizedBox(height: 18),
+                  SearchableSelect(
+                    hint: 'Pilih mata pelajaran',
+                    value: subject,
+                    items: _subjects,
+                    error: _showErrors && subjectError != null,
+                    onChanged: (value) {
+                      setState(() => subject = value);
+                    },
+                  ),
 
-                SolidBtn(
-                  label: edit ? 'Simpan Perubahan' : 'Tambah Course',
-                  onTap: _saveCourse,
-                ),
-              ],
-            ),
+                  _errorText(subjectError),
+
+                  const FieldLabel('Deskripsi'),
+
+                  EduField(
+                    controller: desc,
+                    hint: 'Masukkan deskripsi course',
+                    maxLines: 3,
+                  ),
+
+                  const FieldLabel(
+                    'Tingkat Kelas',
+                    required: true,
+                  ),
+
+                  EduSelect(
+                    hint: 'Pilih tingkat kelas',
+                    value: level.text.isEmpty ? null : level.text,
+                    items: _levels,
+                    error: _showErrors && levelError != null,
+                    onChanged: (value) {
+                      setState(() => level.text = value ?? '');
+                    },
+                  ),
+
+                  _errorText(levelError),
+
+                  const FieldLabel(
+                    'Guru Pengajar',
+                    required: true,
+                  ),
+
+                  SearchableSelect(
+                    hint: 'Pilih guru pengajar',
+                    value: _selectedTeacherName(),
+                    items: availableTeachers
+                        .map(
+                          (user) =>
+                              (user['full_name'] ?? '').toString(),
+                        )
+                        .where((value) => value.isNotEmpty)
+                        .toList(),
+                    subtitle: (teacherName) => 'Guru pengajar',
+                    error: _showErrors && teacherError != null,
+                    onChanged: (value) {
+                      setState(() {
+                        final matches = availableTeachers.where(
+                          (row) =>
+                              (row['full_name'] ?? '').toString() ==
+                              value,
+                        );
+
+                        teacherId = matches.isEmpty
+                            ? null
+                            : matches.first['id'].toString();
+                      });
+                    },
+                  ),
+
+                  _errorText(teacherError),
+
+                  const FieldLabel(
+                    'Pilih Siswa',
+                    required: true,
+                  ),
+
+                  if (availableStudents.isEmpty)
+                    const Text(
+                      'Belum ada siswa di Supabase. '
+                      'Tambahkan akun siswa terlebih dahulu.',
+                      style: TextStyle(
+                        color: Ui.muted,
+                        fontSize: 11,
+                      ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color:
+                              _showErrors && studentsError != null
+                                  ? Ui.red
+                                  : Ui.line,
+                          width:
+                              _showErrors && studentsError != null
+                                  ? 1.3
+                                  : 1,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${selectedStudents.length} siswa dipilih',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          TextField(
+                            onChanged: (value) {
+                              setState(() => _studentQuery = value);
+                            },
+                            style: const TextStyle(fontSize: 11),
+                            decoration: const InputDecoration(
+                              hintText:
+                                  'Cari nama atau kelas siswa',
+                              hintStyle: TextStyle(fontSize: 10),
+                              prefixIcon: Icon(
+                                Icons.search,
+                                size: 18,
+                              ),
+                              isDense: true,
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+
+                          const SizedBox(height: 6),
+
+                          if (filteredStudents.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
+                              child: Text(
+                                'Siswa tidak ditemukan.',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Ui.muted,
+                                ),
+                              ),
+                            )
+                          else
+                            for (final user in filteredStudents)
+                              CheckboxListTile(
+                                value: selectedStudents.contains(
+                                  user['id'].toString(),
+                                ),
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                title: Text(
+                                  (user['full_name'] ?? 'Tanpa nama')
+                                      .toString(),
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                subtitle: Text(
+                                  (user['class_name'] ??
+                                          user['grade_level'] ??
+                                          'Siswa')
+                                      .toString(),
+                                  style: const TextStyle(fontSize: 9),
+                                ),
+                                onChanged: (checked) {
+                                  setState(() {
+                                    final id = user['id'].toString();
+
+                                    if (checked == true) {
+                                      selectedStudents.add(id);
+                                    } else {
+                                      selectedStudents.remove(id);
+                                    }
+                                  });
+                                },
+                              ),
+                        ],
+                      ),
+                    ),
+
+                  _errorText(
+                    availableStudents.isEmpty ? null : studentsError,
+                  ),
+
+                  const FieldLabel(
+                    'Status',
+                    required: true,
+                  ),
+
+                  StatusRadio(
+                    active: active,
+                    onChanged: (value) {
+                      setState(() => active = value);
+                    },
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  SolidBtn(
+                    label: _saving
+                        ? 'Menyimpan...'
+                        : edit
+                            ? 'Simpan Perubahan'
+                            : 'Tambah Course',
+                    onTap: _saveCourse,
+                  ),
+                ],
+              ),
 
             const SizedBox(height: 24),
 
@@ -433,6 +668,18 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
         ),
       ),
     );
+  }
+
+  String? _selectedTeacherName() {
+    if (teacherId == null) return null;
+
+    for (final user in availableTeachers) {
+      if (user['id'].toString() == teacherId) {
+        return (user['full_name'] ?? '').toString();
+      }
+    }
+
+    return null;
   }
 }
 
@@ -466,7 +713,9 @@ class SearchableSelect extends StatelessWidget {
       ),
     );
 
-    if (selected != null) onChanged(selected);
+    if (selected != null) {
+      onChanged(selected);
+    }
   }
 
   @override
@@ -481,9 +730,15 @@ class SearchableSelect extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 11,
+          ),
           decoration: BoxDecoration(
-            border: Border.all(color: borderColor, width: error ? 1.3 : 1),
+            border: Border.all(
+              color: borderColor,
+              width: error ? 1.3 : 1,
+            ),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -493,11 +748,17 @@ class SearchableSelect extends StatelessWidget {
                   value ?? hint,
                   style: TextStyle(
                     fontSize: value == null ? 11 : 12,
-                    color: value == null ? const Color(0xFFB6BFCC) : Ui.text,
+                    color: value == null
+                        ? const Color(0xFFB6BFCC)
+                        : Ui.text,
                   ),
                 ),
               ),
-              const Icon(Icons.keyboard_arrow_down, size: 18, color: Ui.muted),
+              const Icon(
+                Icons.keyboard_arrow_down,
+                size: 18,
+                color: Ui.muted,
+              ),
             ],
           ),
         ),
@@ -524,14 +785,17 @@ class _SearchableOptionsSheet extends StatefulWidget {
       _SearchableOptionsSheetState();
 }
 
-class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
+class _SearchableOptionsSheetState
+    extends State<_SearchableOptionsSheet> {
   String query = '';
 
   @override
   Widget build(BuildContext context) {
     final normalizedQuery = query.trim().toLowerCase();
+
     final filteredItems = widget.items.where((item) {
       final detail = widget.subtitle?.call(item) ?? '';
+
       return item.toLowerCase().contains(normalizedQuery) ||
           detail.toLowerCase().contains(normalizedQuery);
     }).toList();
@@ -551,34 +815,51 @@ class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
             children: [
               Text(
                 widget.title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                ),
               ),
+
               const SizedBox(height: 12),
+
               TextField(
                 autofocus: true,
-                onChanged: (value) => setState(() => query = value),
+                onChanged: (value) {
+                  setState(() => query = value);
+                },
                 decoration: const InputDecoration(
                   hintText: 'Cari pilihan',
                   prefixIcon: Icon(Icons.search),
                   border: OutlineInputBorder(),
                 ),
               ),
+
               const SizedBox(height: 8),
+
               Expanded(
                 child: filteredItems.isEmpty
-                    ? const Center(child: Text('Pilihan tidak ditemukan.'))
+                    ? const Center(
+                        child: Text('Pilihan tidak ditemukan.'),
+                      )
                     : ListView.builder(
                         itemCount: filteredItems.length,
                         itemBuilder: (context, index) {
                           final item = filteredItems[index];
                           final detail = widget.subtitle?.call(item);
+
                           return ListTile(
                             title: Text(item),
-                            subtitle: detail == null ? null : Text(detail),
+                            subtitle:
+                                detail == null ? null : Text(detail),
                             trailing: item == widget.selectedValue
-                                ? const Icon(Icons.check, color: Ui.blue)
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Ui.blue,
+                                  )
                                 : null,
-                            onTap: () => Navigator.pop(context, item),
+                            onTap: () {
+                              Navigator.pop(context, item);
+                            },
                           );
                         },
                       ),

@@ -1,16 +1,26 @@
 import 'package:flutter/material.dart';
-
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../components/ui/kit.dart';
 import '../../core/routes/route_names.dart';
-import '../../core/mock/mock_data.dart';
-import '../../repositories/user_repository.dart';
-import '../../repositories/course_repository.dart';
-import '../../repositories/quiz_repository.dart';
-import '../../repositories/notification_repository.dart';
-import '../../models/user_model.dart';
-import '../../models/course_model.dart';
-import '../../models/quiz_model.dart';
-import '../../models/notification_model.dart';
+
+class _T {
+  static const profiles = 'profiles';
+  static const courses = 'course';
+  static const quizzes = 'quiz';
+  static const notifications = 'notifications';
+}
+
+class _CourseRate {
+  final String title;
+  final int percent;
+  const _CourseRate(this.title, this.percent);
+}
+
+class _ActivityItem {
+  final String title;
+  final DateTime? createdAt;
+  const _ActivityItem(this.title, this.createdAt);
+}
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -20,28 +30,19 @@ class AdminDashboardPage extends StatefulWidget {
 }
 
 class _AdminDashboardPageState extends State<AdminDashboardPage> {
-  final _userRepository = UserRepository();
-  final _courseRepository = CourseRepository();
-  final _quizRepository = QuizRepository();
-  final _notificationRepository = NotificationRepository();
+  final SupabaseClient _db = Supabase.instance.client;
 
-  List<UserModel> _users = [];
-  List<Course> _courses = [];
-  List<Quiz> _quizzes = [];
-  List<NotificationModel> _notifications = [];
+  String _adminName = 'Admin';
+  int _totalSiswa = 0;
+  int _totalGuru = 0;
+  int _totalKursus = 0;
+  int _totalQuiz = 0;
+  int _unreadNotifications = 0;
+  List<_CourseRate> _rates = [];
+  List<_ActivityItem> _activities = [];
 
   bool _loading = true;
-
-  int get _totalSiswa => _users.where((user) => user.role == 'student').length;
-
-  int get _totalGuru => _users.where((user) => user.role == 'teacher').length;
-
-  int get _totalKursus => _courses.length;
-
-  int get _totalQuiz => _quizzes.length;
-
-  int get _unreadNotifications =>
-      _notifications.where((item) => !item.read).length;
+  bool _error = false;
 
   @override
   void initState() {
@@ -49,36 +50,158 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     _loadDashboard();
   }
 
-  Future<void> _loadDashboard() async {
+  final List<String> _errors = [];
+
+  bool _isRole(Map<String, dynamic> p, List<String> names) =>
+      names.contains('${p['role']}'.toLowerCase().trim());
+
+
+  Future<List<Map<String, dynamic>>> _fetch(
+    String table,
+    String columns, {
+    String? orderBy,
+  }) async {
     try {
-      final results = await Future.wait([
-        _userRepository.getUsers(),
-        _courseRepository.getCourses(),
-        _quizRepository.getQuizzes(),
-        _notificationRepository.getNotifications(),
-      ]);
-
-      if (!mounted) return;
-
-      setState(() {
-        _users = results[0] as List<UserModel>;
-        _courses = results[1] as List<Course>;
-        _quizzes = results[2] as List<Quiz>;
-        _notifications = results[3] as List<NotificationModel>;
-        _loading = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal memuat data dashboard.')),
-      );
+      final base = _db.from(table).select(columns);
+      final data = orderBy == null
+          ? await base
+          : await base.order(orderBy, ascending: false);
+      return List<Map<String, dynamic>>.from(data as List);
+    } catch (e) {
+      debugPrint('[AdminDashboard] query "$table" gagal: $e');
+      _errors.add('$table: $e');
+      return [];
     }
   }
 
-  void _openNotifications() {
-    Navigator.pushNamed(context, RouteNames.adminNotifications);
+  /// Ambil nilai dari beberapa kemungkinan nama kolom.
+  dynamic _pick(Map<String, dynamic> row, List<String> keys) {
+    for (final k in keys) {
+      if (row.containsKey(k) && row[k] != null) return row[k];
+    }
+    return null;
+  }
+
+  Future<void> _loadDashboard() async {
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = false;
+      });
+    }
+    _errors.clear();
+
+    // select('*') supaya tidak error karena nama kolom beda.
+    final results = await Future.wait([
+      _fetch(_T.profiles, '*'),
+      _fetch(_T.courses, '*'),
+      _fetch(_T.quizzes, '*'),
+      _fetch(_T.notifications, '*'),
+    ]);
+
+    if (!mounted) return;
+
+    final profiles = results[0];
+    final courses = results[1];
+    final quizzes = results[2];
+    final notifs = results[3];
+
+    // Debug: lihat kolom asli tiap tabel di console
+    for (final entry in {
+      'profiles': profiles,
+      'course': courses,
+      'quiz': quizzes,
+      'notifications': notifs,
+    }.entries) {
+      if (entry.value.isNotEmpty) {
+        debugPrint('[AdminDashboard] kolom ${entry.key}: '
+            '${entry.value.first.keys.toList()}');
+      }
+    }
+
+    // Nama admin yang sedang login
+    final uid = _db.auth.currentUser?.id;
+    final me = profiles.where((p) => p['id'] == uid).toList();
+    final name = me.isNotEmpty
+        ? _pick(me.first, ['full_name', 'name', 'nama'])?.toString()
+        : null;
+
+    // Completion rate: pakai kolom persentase/progress di tabel course
+    final rates = courses.map((course) {
+      final raw = _pick(course, [
+        'percent',
+        'progress',
+        'completion_rate',
+        'completion',
+        'completed_percent',
+      ]);
+      final value = raw is num ? raw.round() : int.tryParse('$raw') ?? 0;
+      return _CourseRate(
+        (_pick(course, ['title', 'name', 'nama', 'judul']) ?? '-').toString(),
+        value.clamp(0, 100).toInt(),
+      );
+    }).toList();
+
+    // Notifikasi: urutkan terbaru di atas (kalau ada kolom tanggal)
+    DateTime? dateOf(Map<String, dynamic> n) => DateTime.tryParse(
+          '${_pick(n, ['created_at', 'date', 'time', 'timestamp'])}',
+        )?.toLocal();
+    notifs.sort((x, y) {
+      final dx = dateOf(x), dy = dateOf(y);
+      if (dx == null || dy == null) return 0;
+      return dy.compareTo(dx);
+    });
+
+    bool isRead(Map<String, dynamic> n) =>
+        _pick(n, ['read', 'is_read', 'isRead', 'dibaca']) == true;
+
+    setState(() {
+      _adminName = (name == null || name.isEmpty) ? 'Admin' : name;
+      _totalSiswa =
+          profiles.where((p) => _isRole(p, ['student', 'siswa'])).length;
+      _totalGuru =
+          profiles.where((p) => _isRole(p, ['teacher', 'guru'])).length;
+      _totalKursus = courses.length;
+      _totalQuiz = quizzes.length;
+      _unreadNotifications = notifs.where((n) => !isRead(n)).length;
+      _rates = rates;
+      _activities = notifs.take(3).map((n) {
+        return _ActivityItem(
+          (_pick(n, ['title', 'judul', 'message', 'body']) ?? '-').toString(),
+          dateOf(n),
+        );
+      }).toList();
+      _loading = false;
+      _error = false;
+    });
+  }
+
+  /// Buka page lain, lalu refresh dashboard saat kembali
+  /// supaya angka & notifikasi selalu sinkron.
+  Future<void> _go(String route) async {
+    await Navigator.pushNamed(context, route);
+    if (mounted) _loadDashboard();
+  }
+
+  void _openNotifications() => _go(RouteNames.adminNotifications);
+
+  String _formatTime(DateTime? time) {
+    if (time == null) return '-';
+    final diff = DateTime.now().difference(time);
+    if (diff.inMinutes < 1) return 'Baru saja';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} menit lalu';
+    if (diff.inHours < 24) return '${diff.inHours} jam lalu';
+    if (diff.inDays < 7) return '${diff.inDays} hari lalu';
+    return '${time.day.toString().padLeft(2, '0')}/'
+        '${time.month.toString().padLeft(2, '0')}/${time.year}';
+  }
+
+  Widget _tappable(Widget child, String route) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _go(route),
+      child: child,
+    );
   }
 
   @override
@@ -90,14 +213,16 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         children: [
           Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Panel Admin', style: TextStyle(fontSize: 11)),
+                    const Text('Panel Admin', style: TextStyle(fontSize: 11)),
                     Text(
-                      'Ahmad Fajar',
-                      style: TextStyle(
+                      _adminName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
                         fontSize: 17,
                         fontWeight: FontWeight.w800,
                       ),
@@ -105,73 +230,107 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                   ],
                 ),
               ),
-
               _NotificationButton(
                 count: _unreadNotifications,
                 onTap: _openNotifications,
               ),
-
               const SizedBox(width: 10),
               const DarkAvatar(size: 34),
             ],
           ),
-
           const SizedBox(height: 14),
-
           if (_loading)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 30),
               child: Center(child: CircularProgressIndicator()),
             )
+          else if (_error)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 30),
+              child: Center(
+                child: Column(
+                  children: [
+                    const Text('Data gagal dimuat.'),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: _loadDashboard,
+                      child: const Text('Coba lagi'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           else ...[
+            if (_errors.isNotEmpty)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFDECEC),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: SelectableText(
+                  'Error Supabase:\n${_errors.join('\n')}',
+                  style: const TextStyle(fontSize: 10, color: Colors.red),
+                ),
+              ),
             Row(
               children: [
                 Expanded(
-                  child: StatBox(
-                    value: '$_totalSiswa',
-                    label: 'Total Siswa',
-                    icon: Icons.groups_outlined,
-                    tall: true,
+                  child: _tappable(
+                    StatBox(
+                      value: '$_totalSiswa',
+                      label: 'Total Siswa',
+                      icon: Icons.groups_outlined,
+                      tall: true,
+                    ),
+                    RouteNames.adminUsers,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: StatBox(
-                    value: '$_totalGuru',
-                    label: 'Total Guru',
-                    icon: Icons.co_present_outlined,
-                    tall: true,
+                  child: _tappable(
+                    StatBox(
+                      value: '$_totalGuru',
+                      label: 'Total Guru',
+                      icon: Icons.co_present_outlined,
+                      tall: true,
+                    ),
+                    RouteNames.adminUsers,
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
             Row(
               children: [
                 Expanded(
-                  child: StatBox(
-                    value: '$_totalKursus',
-                    label: 'Total Kursus',
-                    icon: Icons.menu_book_outlined,
-                    tall: true,
+                  child: _tappable(
+                    StatBox(
+                      value: '$_totalKursus',
+                      label: 'Total Kursus',
+                      icon: Icons.menu_book_outlined,
+                      tall: true,
+                    ),
+                    RouteNames.adminCourses,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: StatBox(
-                    value: '$_totalQuiz',
-                    label: 'Total Quiz',
-                    icon: Icons.fact_check_outlined,
-                    tall: true,
+                  child: _tappable(
+                    StatBox(
+                      value: '$_totalQuiz',
+                      label: 'Total Quiz',
+                      icon: Icons.fact_check_outlined,
+                      tall: true,
+                    ),
+                    RouteNames.adminQuizzes,
                   ),
                 ),
               ],
             ),
-
             const SizedBox(height: 14),
-
             EduCard(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -182,27 +341,28 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                     style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 12),
-
-                  for (final course in mockCourses)
-                    _Rate(course.title, course.percent),
+                  if (_rates.isEmpty)
+                    const Text('Belum ada data kursus.')
+                  else
+                    for (final rate in _rates) _Rate(rate.title, rate.percent),
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
             const Text(
               'Aktivitas Terbaru',
               style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
             ),
-
             const SizedBox(height: 8),
-
-            if (_notifications.isEmpty)
+            if (_activities.isEmpty)
               const Text('Belum ada aktivitas.')
             else
-              for (final notification in _notifications.take(3))
-                _Activity(notification.title, notification.date),
+              for (final item in _activities)
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _openNotifications,
+                  child: _Activity(item.title, _formatTime(item.createdAt)),
+                ),
           ],
         ],
       ),
