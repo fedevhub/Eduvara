@@ -1,22 +1,167 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../components/ui/kit.dart';
-import '../../../core/mock/mock_data.dart';
 import '../../../core/routes/route_names.dart';
+import '../../../models/user_model.dart';
+import '../../../repositories/user_repository.dart';
 
 class UserDetailPage extends StatefulWidget {
   const UserDetailPage({super.key});
+
   @override
   State<UserDetailPage> createState() => _UserDetailPageState();
 }
 
 class _UserDetailPageState extends State<UserDetailPage> {
-  bool? _active;
+  final UserRepository _repo = UserRepository();
+
+  String? _id;
+  UserModel? _user;
+  bool _init = false;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_init) return;
+    _init = true;
+
+    final arg = ModalRoute.of(context)?.settings.arguments;
+    if (arg is String) {
+      _id = arg;
+    } else if (arg is Map && arg['id'] != null) {
+      _id = arg['id'].toString();
+    }
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_id == null) {
+      setState(() {
+        _loading = false;
+        _error = 'Pengguna tidak ditemukan.';
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final u = await _repo.getUser(_id!);
+      if (!mounted) return;
+      setState(() {
+        _user = u;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'Gagal memuat pengguna.\n$e';
+      });
+    }
+  }
+
+  bool get _isSelf =>
+      Supabase.instance.client.auth.currentUser?.id == _user?.id;
+
+  String _date(DateTime? d) => d == null
+      ? '-'
+      : '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  void _msg(String m) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+
+  Future<void> _edit() async {
+    final saved = await Navigator.pushNamed(
+      context,
+      RouteNames.adminUserForm,
+      arguments: _user!.id,
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _toggle() async {
+    final user = _user!;
+    if (_isSelf) {
+      _msg('Kamu tidak bisa menonaktifkan akunmu sendiri.');
+      return;
+    }
+    final ok = await showConfirmWarning(
+      context,
+      title: user.isActive ? 'Nonaktifkan Akun?' : 'Aktifkan Akun?',
+      message: user.isActive
+          ? '${user.name} tidak akan bisa mengakses platform.'
+          : '${user.name} akan kembali bisa mengakses platform.',
+    );
+    if (!ok || !mounted) return;
+
+    try {
+      await _repo.setStatus(user.id, !user.isActive);
+      await _load();
+      if (!mounted) return;
+      await showSuccessDialog(
+        context,
+        user.isActive
+            ? 'Akun Berhasil di Nonaktifkan'
+            : 'Akun Berhasil di Aktifkan',
+      );
+    } catch (e) {
+      _msg('Gagal mengubah status: $e');
+    }
+  }
+
+  Future<void> _delete() async {
+    final user = _user!;
+    if (_isSelf) {
+      _msg('Kamu tidak bisa menghapus akunmu sendiri.');
+      return;
+    }
+    final ok = await showConfirmDanger(
+      context,
+      title: 'Hapus Akun?',
+      message: '${user.name} akan dihapus dari platform.',
+    );
+    if (!ok || !mounted) return;
+
+    try {
+      await _repo.deleteUser(user.id);
+      if (!mounted) return;
+      await showSuccessDialog(context, 'Akun Berhasil di Hapus');
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      _msg('Gagal menghapus pengguna: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final arg = ModalRoute.of(context)?.settings.arguments;
-    final user = arg is MockUser ? arg : mockSiswa.first;
-    final active = _active ?? user.active;
+    if (_loading || _error != null || _user == null) {
+      return EduScaffold(
+        bottom: const EduBottomNav(role: 'admin', current: 1),
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const BackLink(),
+            const SizedBox(height: 24),
+            if (_loading)
+              const Center(child: CircularProgressIndicator())
+            else ...[
+              Text(_error ?? 'Pengguna tidak ditemukan.'),
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: _load, child: const Text('Coba lagi')),
+            ],
+          ],
+        ),
+      );
+    }
+
+    final user = _user!;
+    final active = user.isActive;
 
     return Scaffold(
       backgroundColor: Ui.bg,
@@ -92,26 +237,27 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        _row('Role', user.role),
+                        _row('Email', user.email),
+                        _row(
+                          'Password',
+                          'Tidak dapat ditampilkan (dikelola Supabase Auth)',
+                        ),
+                        _row('Role', user.roleLabel),
                         _row('Status', active ? 'Aktif' : 'Nonaktif'),
-                        if (user.role == 'Siswa') _row('Kelas', user.info.replaceFirst('Kelas ', '')),
-                        if (user.role == 'Guru') _row('Mapel', user.info),
-                        _row('Bergabung', user.joined, last: true),
+                        if (user.role == 'teacher') ...[
+                          _row('NIP', user.nip ?? '-'),
+                          _row('Mapel', user.mapel ?? '-'),
+                        ],
+                        if (user.role == 'student')
+                          _row('Kelas', user.kelas ?? '-'),
+                        _row('Bergabung', _date(user.createdAt), last: true),
                       ],
                     ),
                   ),
                   const SizedBox(height: 14),
                   Row(
                     children: [
-                      Expanded(
-                        child: SoftBtn.edit(
-                          onTap: () => Navigator.pushNamed(
-                            context,
-                            RouteNames.adminUserForm,
-                            arguments: user,
-                          ),
-                        ),
-                      ),
+                      Expanded(child: SoftBtn.edit(onTap: _edit)),
                       const SizedBox(width: 12),
                       Expanded(
                         child: SoftBtn(
@@ -119,13 +265,13 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           icon: Icons.shield_outlined,
                           bg: Ui.yellowSoft,
                           fg: Ui.orangeDark,
-                          onTap: () => _toggle(user, active),
+                          onTap: _toggle,
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  SoftBtn.delete(onTap: () => _delete(user)),
+                  SoftBtn.delete(onTap: _delete),
                   const SizedBox(height: 60),
                   const EduFooter(),
                 ],
@@ -135,34 +281,6 @@ class _UserDetailPageState extends State<UserDetailPage> {
         ),
       ),
     );
-  }
-
-  Future<void> _toggle(MockUser user, bool active) async {
-    final ok = await showConfirmWarning(
-      context,
-      title: active ? 'Nonaktifkan Akun?' : 'Aktifkan Akun?',
-      message: active
-          ? '${user.name} tidak akan bisa mengakses platform.'
-          : '${user.name} akan kembali bisa mengakses platform.',
-    );
-    if (!ok || !mounted) return;
-    setState(() => _active = !active);
-    await showSuccessDialog(
-      context,
-      active ? 'Akun Berhasil di Nonaktifkan' : 'Akun Berhasil di Aktifkan',
-    );
-  }
-
-  Future<void> _delete(MockUser user) async {
-    final ok = await showConfirmDanger(
-      context,
-      title: 'Hapus Akun?',
-      message: '${user.name} akan dihapus dari platform.',
-    );
-    if (!ok || !mounted) return;
-    await showSuccessDialog(context, 'Akun Berhasil di Hapus');
-    if (!mounted) return;
-    Navigator.pop(context);
   }
 
   Widget _row(String k, String v, {bool last = false}) => Container(
@@ -180,7 +298,13 @@ class _UserDetailPageState extends State<UserDetailPage> {
             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
           ),
         ),
-        Text(v, style: const TextStyle(fontSize: 10, color: Ui.muted)),
+        Flexible(
+          child: Text(
+            v,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 10, color: Ui.muted),
+          ),
+        ),
       ],
     ),
   );

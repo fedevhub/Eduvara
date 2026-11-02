@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
+import '../../../models/user_model.dart';
+import '../../../repositories/user_repository.dart';
 
 class UserListPage extends StatefulWidget {
   const UserListPage({super.key});
@@ -12,17 +13,16 @@ class UserListPage extends StatefulWidget {
 }
 
 class _UserListPageState extends State<UserListPage> {
-  final SupabaseClient _db = Supabase.instance.client;
+  final UserRepository _repo = UserRepository();
 
   // Urutan sama dengan tab: Siswa, Guru, Admin.
   static const List<String> _roles = ['student', 'teacher', 'admin'];
 
   int tab = 0;
   String query = '';
-
   bool _loading = true;
   String? _error;
-  List<Map<String, dynamic>> _users = [];
+  List<UserModel> _users = [];
 
   @override
   void initState() {
@@ -35,25 +35,16 @@ class _UserListPageState extends State<UserListPage> {
       _loading = true;
       _error = null;
     });
-
     try {
-      final rows = await _db
-          .from('profiles')
-          .select()
-          .inFilter('role', _roles)
-          .order('full_name');
-
+      final data = await _repo.getUsers();
       if (!mounted) return;
-
       setState(() {
-        _users = List<Map<String, dynamic>>.from(rows);
+        _users = data;
         _loading = false;
       });
     } catch (e) {
-      debugPrint('[UserList] Gagal memuat pengguna: $e');
-
+      debugPrint('[UserList] Gagal memuat: $e');
       if (!mounted) return;
-
       setState(() {
         _loading = false;
         _error = 'Gagal memuat pengguna dari Supabase.\n$e';
@@ -61,72 +52,42 @@ class _UserListPageState extends State<UserListPage> {
     }
   }
 
-  String _roleOf(Map<String, dynamic> user) =>
-      (user['role'] ?? '').toString().toLowerCase();
+  int _count(String role) => _users.where((u) => u.role == role).length;
 
-  int _count(String role) => _users.where((u) => _roleOf(u) == role).length;
-
-  /// Hanya ada jika tabel profiles punya kolom status aktif.
-  bool? _activeOf(Map<String, dynamic> user) {
-    final value = user['is_active'] ?? user['active'] ?? user['status'];
-
-    if (value == null) return null;
-    if (value is bool) return value;
-
-    final text = value.toString().toLowerCase();
-    return text == 'active' || text == 'aktif' || text == 'true';
-  }
-
-  String _infoOf(Map<String, dynamic> user) {
-    final detail = user['class_name'] ?? user['grade_level'];
-
-    if (detail != null && detail.toString().isNotEmpty) {
-      return detail.toString();
-    }
-
-    return switch (_roleOf(user)) {
-      'student' => 'Siswa',
-      'teacher' => 'Guru',
-      _ => 'Admin',
-    };
-  }
-
-  List<Map<String, dynamic>> get _visibleUsers {
+  List<UserModel> get _visible {
     final role = _roles[tab];
     final q = query.trim().toLowerCase();
-
     return _users.where((u) {
-      if (_roleOf(u) != role) return false;
+      if (u.role != role) return false;
       if (q.isEmpty) return true;
-
-      final name = (u['full_name'] ?? '').toString().toLowerCase();
-      final email = (u['email'] ?? '').toString().toLowerCase();
-
-      return name.contains(q) || email.contains(q);
+      return u.name.toLowerCase().contains(q) ||
+          u.email.toLowerCase().contains(q);
     }).toList();
   }
 
-  Future<void> _openForm() async {
-    final saved = await Navigator.pushNamed(
-      context,
-      RouteNames.adminUserForm,
-    );
+  String _info(UserModel u) {
+    if (u.role == 'student') {
+      return (u.kelas?.isNotEmpty ?? false) ? u.kelas! : 'Siswa';
+    }
+    if (u.role == 'teacher') {
+      return (u.mapel?.isNotEmpty ?? false) ? u.mapel! : 'Guru';
+    }
+    return 'Admin';
+  }
 
-    // Form mengembalikan true saat berhasil menyimpan.
+  Future<void> _openForm() async {
+    final saved = await Navigator.pushNamed(context, RouteNames.adminUserForm);
     if (saved == true) await _load();
   }
 
-  Future<void> _openDetail(Map<String, dynamic> user) async {
-    // Detail cukup menerima id pengguna, data lengkapnya diambil ulang
-    // dari Supabase oleh page detail.
-    final changed = await Navigator.pushNamed(
+  Future<void> _openDetail(UserModel u) async {
+    await Navigator.pushNamed(
       context,
       RouteNames.adminUserDetail,
-      arguments: user['id'].toString(),
+      arguments: u.id,
     );
-
-    // Detail mengembalikan true bila ada perubahan (edit / hapus).
-    if (changed == true) await _load();
+    // Selalu muat ulang, karena detail bisa edit / nonaktifkan / hapus.
+    if (mounted) await _load();
   }
 
   Widget _content() {
@@ -144,17 +105,13 @@ class _UserListPageState extends State<UserListPage> {
           children: [
             Text(_error!, textAlign: TextAlign.center),
             const SizedBox(height: 12),
-            OutlinedButton(
-              onPressed: _load,
-              child: const Text('Coba lagi'),
-            ),
+            OutlinedButton(onPressed: _load, child: const Text('Coba lagi')),
           ],
         ),
       );
     }
 
-    final users = _visibleUsers;
-
+    final users = _visible;
     if (users.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -167,15 +124,10 @@ class _UserListPageState extends State<UserListPage> {
       );
     }
 
-    return Column(
-      children: [for (final u in users) _userCard(u)],
-    );
+    return Column(children: [for (final u in users) _userCard(u)]);
   }
 
-  Widget _userCard(Map<String, dynamic> u) {
-    final email = (u['email'] ?? '').toString();
-    final active = _activeOf(u);
-
+  Widget _userCard(UserModel u) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: EduCard(
@@ -190,19 +142,19 @@ class _UserListPageState extends State<UserListPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    (u['full_name'] ?? 'Tanpa nama').toString(),
+                    u.name.isEmpty ? 'Tanpa nama' : u.name,
                     style: const TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (email.isNotEmpty)
+                  if (u.email.isNotEmpty)
                     Text(
-                      email,
+                      u.email,
                       style: const TextStyle(fontSize: 8, color: Ui.muted),
                     ),
                   Text(
-                    _infoOf(u),
+                    _info(u),
                     style: const TextStyle(fontSize: 8, color: Ui.muted),
                   ),
                 ],
@@ -211,18 +163,12 @@ class _UserListPageState extends State<UserListPage> {
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                if (active != null) ...[
-                  Pill(
-                    active ? 'Aktif' : 'Nonaktif',
-                    kind: active ? PillKind.active : PillKind.inactive,
-                  ),
-                  const SizedBox(height: 6),
-                ],
-                const Icon(
-                  Icons.chevron_right,
-                  size: 16,
-                  color: Ui.muted,
+                Pill(
+                  u.isActive ? 'Aktif' : 'Nonaktif',
+                  kind: u.isActive ? PillKind.active : PillKind.inactive,
                 ),
+                const SizedBox(height: 6),
+                const Icon(Icons.chevron_right, size: 16, color: Ui.muted),
               ],
             ),
           ],

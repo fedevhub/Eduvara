@@ -71,6 +71,10 @@ class AuthProvider extends ChangeNotifier {
       return 'Silakan verifikasi email akun kamu.';
     }
 
+    if (message.contains('dinonaktifkan')) {
+      return 'Akun kamu dinonaktifkan. Hubungi admin.';
+    }
+
     return 'Login gagal. Periksa akun dan koneksi internet.';
   }
 }

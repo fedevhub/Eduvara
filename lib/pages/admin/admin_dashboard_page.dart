@@ -5,9 +5,9 @@ import '../../core/routes/route_names.dart';
 
 class _T {
   static const profiles = 'profiles';
-  static const courses = 'course';
+  static const courses = 'courses';
   static const quizzes = 'quiz';
-  static const notifications = 'notifications';
+  static const activities = 'activity_logs';
 }
 
 class _CourseRate {
@@ -19,7 +19,9 @@ class _CourseRate {
 class _ActivityItem {
   final String title;
   final DateTime? createdAt;
-  const _ActivityItem(this.title, this.createdAt);
+  final String entity;
+  final String? courseId;
+  const _ActivityItem(this.title, this.createdAt, this.entity, this.courseId);
 }
 
 class AdminDashboardPage extends StatefulWidget {
@@ -55,17 +57,18 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   bool _isRole(Map<String, dynamic> p, List<String> names) =>
       names.contains('${p['role']}'.toLowerCase().trim());
 
-
   Future<List<Map<String, dynamic>>> _fetch(
     String table,
     String columns, {
     String? orderBy,
+    int? limit,
   }) async {
     try {
       final base = _db.from(table).select(columns);
-      final data = orderBy == null
-          ? await base
-          : await base.order(orderBy, ascending: false);
+      final ordered = orderBy == null
+          ? base
+          : base.order(orderBy, ascending: false);
+      final data = limit == null ? await ordered : await ordered.limit(limit);
       return List<Map<String, dynamic>>.from(data as List);
     } catch (e) {
       debugPrint('[AdminDashboard] query "$table" gagal: $e');
@@ -96,7 +99,12 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       _fetch(_T.profiles, '*'),
       _fetch(_T.courses, '*'),
       _fetch(_T.quizzes, '*'),
-      _fetch(_T.notifications, '*'),
+      _fetch(
+        _T.activities,
+        'id, actor_role, actor_name, action, entity, entity_id, entity_name, is_read, created_at',
+        orderBy: 'created_at',
+        limit: 100,
+      ),
     ]);
 
     if (!mounted) return;
@@ -104,18 +112,19 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final profiles = results[0];
     final courses = results[1];
     final quizzes = results[2];
-    final notifs = results[3];
+    final activities = results[3];
 
     // Debug: lihat kolom asli tiap tabel di console
     for (final entry in {
       'profiles': profiles,
       'course': courses,
       'quiz': quizzes,
-      'notifications': notifs,
     }.entries) {
       if (entry.value.isNotEmpty) {
-        debugPrint('[AdminDashboard] kolom ${entry.key}: '
-            '${entry.value.first.keys.toList()}');
+        debugPrint(
+          '[AdminDashboard] kolom ${entry.key}: '
+          '${entry.value.first.keys.toList()}',
+        );
       }
     }
 
@@ -142,33 +151,54 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
       );
     }).toList();
 
-    // Notifikasi: urutkan terbaru di atas (kalau ada kolom tanggal)
     DateTime? dateOf(Map<String, dynamic> n) => DateTime.tryParse(
-          '${_pick(n, ['created_at', 'date', 'time', 'timestamp'])}',
-        )?.toLocal();
-    notifs.sort((x, y) {
-      final dx = dateOf(x), dy = dateOf(y);
-      if (dx == null || dy == null) return 0;
-      return dy.compareTo(dx);
-    });
-
-    bool isRead(Map<String, dynamic> n) =>
-        _pick(n, ['read', 'is_read', 'isRead', 'dibaca']) == true;
+      '${_pick(n, ['created_at', 'date', 'time', 'timestamp'])}',
+    )?.toLocal();
+    final userActivities = activities
+        .where(
+          (activity) => ['teacher', 'student'].contains(activity['actor_role']),
+        )
+        .toList();
 
     setState(() {
       _adminName = (name == null || name.isEmpty) ? 'Admin' : name;
-      _totalSiswa =
-          profiles.where((p) => _isRole(p, ['student', 'siswa'])).length;
-      _totalGuru =
-          profiles.where((p) => _isRole(p, ['teacher', 'guru'])).length;
+      _totalSiswa = profiles
+          .where((p) => _isRole(p, ['student', 'siswa']))
+          .length;
+      _totalGuru = profiles
+          .where((p) => _isRole(p, ['teacher', 'guru']))
+          .length;
       _totalKursus = courses.length;
       _totalQuiz = quizzes.length;
-      _unreadNotifications = notifs.where((n) => !isRead(n)).length;
+      _unreadNotifications = userActivities
+          .where((activity) => activity['is_read'] != true)
+          .length;
       _rates = rates;
-      _activities = notifs.take(3).map((n) {
+      _activities = userActivities.take(3).map((activity) {
+        final action = (activity['action'] ?? '').toString();
+        final entity = (activity['entity'] ?? 'course').toString();
+        final entityLabel = switch (entity) {
+          'material' => 'materi',
+          'quiz' => 'quiz',
+          'user' => 'akun',
+          'course' => 'course',
+          _ => 'course',
+        };
+        final entityName = (activity['entity_name'] ?? entityLabel).toString();
+        final actorName = (activity['actor_name'] ?? 'Admin').toString();
+        final verb = switch (action) {
+          'insert' => 'menambahkan',
+          'update' => 'memperbarui',
+          'delete' => 'menghapus',
+          'complete' => 'menyelesaikan',
+          'submit' => 'mengumpulkan',
+          _ => 'mengubah',
+        };
         return _ActivityItem(
-          (_pick(n, ['title', 'judul', 'message', 'body']) ?? '-').toString(),
-          dateOf(n),
+          '$actorName $verb $entityLabel "$entityName"',
+          dateOf(activity),
+          entity,
+          activity['entity_id']?.toString(),
         );
       }).toList();
       _loading = false;
@@ -360,7 +390,16 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               for (final item in _activities)
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: _openNotifications,
+                  onTap: item.entity != 'course' || item.courseId == null
+                      ? () => _go(RouteNames.adminCourses)
+                      : () =>
+                            Navigator.pushNamed(
+                              context,
+                              RouteNames.adminCourseDetail,
+                              arguments: item.courseId,
+                            ).then((_) {
+                              if (mounted) _loadDashboard();
+                            }),
                   child: _Activity(item.title, _formatTime(item.createdAt)),
                 ),
           ],
