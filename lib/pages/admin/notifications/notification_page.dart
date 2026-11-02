@@ -47,15 +47,14 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
         _loading = false;
       });
     } catch (e) {
-      debugPrint('Error notification: $e');
-
+      debugPrint('[AdminNotifications] Gagal memuat notifikasi: $e');
       if (!mounted) return;
 
       setState(() => _loading = false);
 
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Gagal memuat notifikasi.')));
+      ).showSnackBar(SnackBar(content: Text('Gagal memuat notifikasi: $e')));
     }
   }
 

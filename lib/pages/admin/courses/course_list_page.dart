@@ -4,7 +4,7 @@ import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 
 /// Nama tabel Supabase (ubah di sini kalau berbeda)
-const _tCourse = 'course';
+const _tCourse = 'courses';
 const _tProfiles = 'profiles';
 
 class CourseListPage extends StatefulWidget {
@@ -96,6 +96,24 @@ class _CourseListPageState extends State<CourseListPage> {
     try {
       final courseData = await _db.from(_tCourse).select('*');
       final courses = List<Map<String, dynamic>>.from(courseData as List);
+      final enrollmentData = await _db.from('enrollments').select('course_id');
+      final enrollmentCounts = <String, int>{};
+      for (final enrollment in List<Map<String, dynamic>>.from(
+        enrollmentData,
+      )) {
+        final courseId = enrollment['course_id']?.toString();
+        if (courseId != null) {
+          enrollmentCounts.update(
+            courseId,
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+        }
+      }
+      for (final course in courses) {
+        course['student_count'] =
+            enrollmentCounts[course['id']?.toString()] ?? 0;
+      }
 
       // Nama guru (opsional, hanya kalau tabel profiles bisa dibaca)
       final names = <String, String>{};
@@ -104,8 +122,8 @@ class _CourseListPageState extends State<CourseListPage> {
         for (final p in List<Map<String, dynamic>>.from(pd as List)) {
           final id = p['id'];
           if (id == null) continue;
-          names['$id'] =
-              (_pick(p, ['full_name', 'name', 'nama']) ?? '-').toString();
+          names['$id'] = (_pick(p, ['full_name', 'name', 'nama']) ?? '-')
+              .toString();
         }
       } catch (e) {
         debugPrint('[CourseList] profiles gagal: $e');
@@ -146,7 +164,12 @@ class _CourseListPageState extends State<CourseListPage> {
     }
 
     try {
-      await _db.from(_tCourse).delete().eq(key, c[key]);
+      final courseId = c[key].toString();
+      if (courseId.isEmpty) {
+        _snack('ID course tidak valid.');
+        return;
+      }
+      await _db.rpc('admin_delete_course', params: {'p_course_id': courseId});
     } catch (e) {
       debugPrint('[CourseList] hapus gagal: $e');
       if (mounted) _snack('Gagal menghapus course: $e');
@@ -269,10 +292,8 @@ class _CourseListPageState extends State<CourseListPage> {
                         children: [
                           Expanded(
                             child: SoftBtn.edit(
-                              onTap: () => _go(
-                                RouteNames.adminCourseForm,
-                                arguments: c,
-                              ),
+                              onTap: () =>
+                                  _go(RouteNames.adminCourseForm, arguments: c),
                             ),
                           ),
                           const SizedBox(width: 12),

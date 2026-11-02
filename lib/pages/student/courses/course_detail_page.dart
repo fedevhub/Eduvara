@@ -12,7 +12,12 @@ class StudentCourseDetailPage extends StatefulWidget {
 class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
   int tab = 0;
 
-  Widget _item(String title, String sub, {bool open = false, bool done = false}) {
+  Widget _item(
+    String title,
+    String sub, {
+    bool open = false,
+    bool done = false,
+  }) {
     final card = EduCard(
       borderColor: open ? Ui.blue : (done ? Ui.green : null),
       padding: const EdgeInsets.all(12),
@@ -22,6 +27,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
               tab == 0
                   ? RouteNames.studentMaterialDetail
                   : RouteNames.studentQuiz,
+              arguments: {'entity_name': title},
             )
           : null,
       child: Row(
@@ -30,7 +36,13 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 Text(sub, style: const TextStyle(fontSize: 8.5)),
               ],
             ),
@@ -79,11 +91,17 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
         const SizedBox(height: 10),
         const Row(
           children: [
-            Expanded(child: StatBox(value: '6', label: 'Materi')),
+            Expanded(
+              child: StatBox(value: '6', label: 'Materi'),
+            ),
             SizedBox(width: 10),
-            Expanded(child: StatBox(value: '1/6', label: 'Berjalan')),
+            Expanded(
+              child: StatBox(value: '1/6', label: 'Berjalan'),
+            ),
             SizedBox(width: 10),
-            Expanded(child: StatBox(value: '10%', label: 'Progress')),
+            Expanded(
+              child: StatBox(value: '10%', label: 'Progress'),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -103,7 +121,10 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
             Expanded(
               child: Text(
                 tab == 0 ? 'Daftar Course' : 'Daftar Quiz',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             Text(
@@ -119,7 +140,11 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
           _item('Linear', 'Senin, 15-09-2026'),
           _item('Aljabar', 'Senin, 15-09-2026'),
         ] else ...[
-          _item('Quiz 1 - Latihan Soal Aljabar', '10 Soal | 30 Menit', open: true),
+          _item(
+            'Quiz 1 - Latihan Soal Aljabar',
+            '10 Soal | 30 Menit',
+            open: true,
+          ),
           _item('Quiz 2 - Soal Eksponen', '20 Soal | 60 Menit'),
           _item('Quiz 3 - UH Aljabar', '20 Soal | 60 Menit'),
         ],
