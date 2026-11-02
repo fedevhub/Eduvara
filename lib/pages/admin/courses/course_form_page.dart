@@ -57,7 +57,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   List<Map<String, dynamic>> _teachers = [];
   List<Map<String, dynamic>> _students = [];
-  Map<String, dynamic>? _editingCourse;
 
   List<Map<String, dynamic>> get availableTeachers => _teachers;
 
@@ -69,13 +68,11 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     if (query.isEmpty) return availableStudents;
 
     return availableStudents.where((user) {
-      final fullName =
-          (user['full_name'] ?? '').toString().toLowerCase();
+      final fullName = (user['full_name'] ?? '').toString().toLowerCase();
 
-      final detail =
-          (user['class_name'] ?? user['grade_level'] ?? '')
-              .toString()
-              .toLowerCase();
+      final detail = (user['class_name'] ?? user['grade_level'] ?? '')
+          .toString()
+          .toLowerCase();
 
       return fullName.contains(query) || detail.contains(query);
     }).toList();
@@ -124,6 +121,12 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
             .inFilter('role', ['teacher', 'student'])
             .order('full_name'),
       );
+      final userRows = List<Map<String, dynamic>>.from(
+        await _db.from('user').select('id_user, nama_lengkap, kelas'),
+      );
+      final userDetails = {
+        for (final row in userRows) row['id_user'].toString(): row,
+      };
 
       final subjects = List<String>.of(_baseSubjects);
       final levels = List<String>.of(_baseLevels);
@@ -150,6 +153,14 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
         _students = profiles
             .where((row) => (row['role'] ?? '').toString() == 'student')
+            .map((row) {
+              final details = userDetails[row['id'].toString()];
+              return {
+                ...row,
+                'full_name': details?['nama_lengkap'] ?? row['full_name'],
+                'class_name': details?['kelas'] ?? 'Siswa',
+              };
+            })
             .toList();
 
         _subjects = subjects;
@@ -184,8 +195,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
         .eq('id', _editingCourseId!)
         .single();
 
-    _editingCourse = data;
-
     name.text = (data['title'] ?? data['name'] ?? '').toString();
     desc.text = (data['description'] ?? '').toString();
     level.text = (data['grade_level'] ?? data['level'] ?? '').toString();
@@ -193,7 +202,8 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     teacherId = (data['teacher_id'] ?? data['pengajar_id'])?.toString();
 
     final status = data['status'];
-    active = status == true ||
+    active =
+        status == true ||
         status?.toString().toLowerCase() == 'active' ||
         status?.toString().toLowerCase() == 'aktif';
   }
@@ -207,8 +217,9 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     selectedStudents
       ..clear()
       ..addAll(
-        List<Map<String, dynamic>>.from(rows)
-            .map((row) => row['student_id'].toString()),
+        List<Map<String, dynamic>>.from(
+          rows,
+        ).map((row) => row['student_id'].toString()),
       );
   }
 
@@ -273,10 +284,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
       padding: const EdgeInsets.only(top: 3, bottom: 3),
       child: Text(
         message,
-        style: const TextStyle(
-          color: Colors.red,
-          fontSize: 11,
-        ),
+        style: const TextStyle(color: Colors.red, fontSize: 11),
       ),
     );
   }
@@ -284,15 +292,16 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   void _showMessage(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _saveCourse() async {
     setState(() => _showErrors = true);
 
-    final hasError = _validateName() != null ||
+    final hasError =
+        _validateName() != null ||
         _validateLevel() != null ||
         _validateSubject() != null ||
         _validateTeacher() != null ||
@@ -312,56 +321,19 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
         'status': active ? 'active' : 'inactive',
       };
 
-      String courseId;
-
-      if (_editingCourseId == null) {
-        final inserted = await _db
-            .from('course')
-            .insert(courseData)
-            .select('id')
-            .single();
-
-        courseId = inserted['id'].toString();
-      } else {
-        await _db
-            .from('course')
-            .update(courseData)
-            .eq('id', _editingCourseId!);
-
-        courseId = _editingCourseId!;
-      }
-
-      // Sinkronkan siswa: hapus yang dilepas, tambah yang baru saja.
-      final existing = await _db
-          .from('enrollments')
-          .select('student_id')
-          .eq('course_id', courseId);
-
-      final existingIds = List<Map<String, dynamic>>.from(existing)
-          .map((row) => row['student_id'].toString())
-          .toSet();
-
-      final toRemove = existingIds.difference(selectedStudents).toList();
-      final toAdd = selectedStudents.difference(existingIds);
-
-      if (toRemove.isNotEmpty) {
-        await _db
-            .from('enrollments')
-            .delete()
-            .eq('course_id', courseId)
-            .inFilter('student_id', toRemove);
-      }
-
-      if (toAdd.isNotEmpty) {
-        await _db.from('enrollments').insert(
-              toAdd
-                  .map((id) => <String, dynamic>{
-                        'course_id': courseId,
-                        'student_id': id,
-                      })
-                  .toList(),
-            );
-      }
+      await _db.rpc(
+        'admin_save_course',
+        params: {
+          'p_course_id': _editingCourseId,
+          'p_title': courseData['title'],
+          'p_subject': courseData['subject'],
+          'p_description': courseData['description'],
+          'p_grade_level': courseData['grade_level'],
+          'p_teacher_id': courseData['teacher_id'],
+          'p_active': active,
+          'p_student_ids': selectedStudents.toList(),
+        },
+      );
 
       if (!mounted) return;
 
@@ -410,10 +382,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
             Text(
               edit ? 'Edit Course' : 'Tambah Course',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
             ),
 
             const SizedBox(height: 12),
@@ -421,17 +390,12 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
             if (_loading)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child: Center(
-                  child: CircularProgressIndicator(),
-                ),
+                child: Center(child: CircularProgressIndicator()),
               )
             else
               FormCard(
                 children: [
-                  const FieldLabel(
-                    'Nama Course',
-                    required: true,
-                  ),
+                  const FieldLabel('Nama Course', required: true),
 
                   EduField(
                     controller: name,
@@ -441,10 +405,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                   _errorText(nameError),
 
-                  const FieldLabel(
-                    'Mata Pelajaran',
-                    required: true,
-                  ),
+                  const FieldLabel('Mata Pelajaran', required: true),
 
                   SearchableSelect(
                     hint: 'Pilih mata pelajaran',
@@ -466,10 +427,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                     maxLines: 3,
                   ),
 
-                  const FieldLabel(
-                    'Tingkat Kelas',
-                    required: true,
-                  ),
+                  const FieldLabel('Tingkat Kelas', required: true),
 
                   EduSelect(
                     hint: 'Pilih tingkat kelas',
@@ -483,19 +441,13 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                   _errorText(levelError),
 
-                  const FieldLabel(
-                    'Guru Pengajar',
-                    required: true,
-                  ),
+                  const FieldLabel('Guru Pengajar', required: true),
 
                   SearchableSelect(
                     hint: 'Pilih guru pengajar',
                     value: _selectedTeacherName(),
                     items: availableTeachers
-                        .map(
-                          (user) =>
-                              (user['full_name'] ?? '').toString(),
-                        )
+                        .map((user) => (user['full_name'] ?? '').toString())
                         .where((value) => value.isNotEmpty)
                         .toList(),
                     subtitle: (teacherName) => 'Guru pengajar',
@@ -503,9 +455,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                     onChanged: (value) {
                       setState(() {
                         final matches = availableTeachers.where(
-                          (row) =>
-                              (row['full_name'] ?? '').toString() ==
-                              value,
+                          (row) => (row['full_name'] ?? '').toString() == value,
                         );
 
                         teacherId = matches.isEmpty
@@ -517,19 +467,13 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                   _errorText(teacherError),
 
-                  const FieldLabel(
-                    'Pilih Siswa',
-                    required: true,
-                  ),
+                  const FieldLabel('Pilih Siswa', required: true),
 
                   if (availableStudents.isEmpty)
                     const Text(
                       'Belum ada siswa di Supabase. '
                       'Tambahkan akun siswa terlebih dahulu.',
-                      style: TextStyle(
-                        color: Ui.muted,
-                        fontSize: 11,
-                      ),
+                      style: TextStyle(color: Ui.muted, fontSize: 11),
                     )
                   else
                     Container(
@@ -537,14 +481,10 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         border: Border.all(
-                          color:
-                              _showErrors && studentsError != null
-                                  ? Ui.red
-                                  : Ui.line,
-                          width:
-                              _showErrors && studentsError != null
-                                  ? 1.3
-                                  : 1,
+                          color: _showErrors && studentsError != null
+                              ? Ui.red
+                              : Ui.line,
+                          width: _showErrors && studentsError != null ? 1.3 : 1,
                         ),
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -567,13 +507,9 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                             },
                             style: const TextStyle(fontSize: 11),
                             decoration: const InputDecoration(
-                              hintText:
-                                  'Cari nama atau kelas siswa',
+                              hintText: 'Cari nama atau kelas siswa',
                               hintStyle: TextStyle(fontSize: 10),
-                              prefixIcon: Icon(
-                                Icons.search,
-                                size: 18,
-                              ),
+                              prefixIcon: Icon(Icons.search, size: 18),
                               isDense: true,
                               border: OutlineInputBorder(),
                             ),
@@ -583,15 +519,10 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                           if (filteredStudents.isEmpty)
                             const Padding(
-                              padding: EdgeInsets.symmetric(
-                                vertical: 8,
-                              ),
+                              padding: EdgeInsets.symmetric(vertical: 8),
                               child: Text(
                                 'Siswa tidak ditemukan.',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: Ui.muted,
-                                ),
+                                style: TextStyle(fontSize: 11, color: Ui.muted),
                               ),
                             )
                           else
@@ -632,14 +563,9 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                       ),
                     ),
 
-                  _errorText(
-                    availableStudents.isEmpty ? null : studentsError,
-                  ),
+                  _errorText(availableStudents.isEmpty ? null : studentsError),
 
-                  const FieldLabel(
-                    'Status',
-                    required: true,
-                  ),
+                  const FieldLabel('Status', required: true),
 
                   StatusRadio(
                     active: active,
@@ -654,8 +580,8 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                     label: _saving
                         ? 'Menyimpan...'
                         : edit
-                            ? 'Simpan Perubahan'
-                            : 'Tambah Course',
+                        ? 'Simpan Perubahan'
+                        : 'Tambah Course',
                     onTap: _saveCourse,
                   ),
                 ],
@@ -730,15 +656,9 @@ class SearchableSelect extends StatelessWidget {
         borderRadius: BorderRadius.circular(6),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 11,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
           decoration: BoxDecoration(
-            border: Border.all(
-              color: borderColor,
-              width: error ? 1.3 : 1,
-            ),
+            border: Border.all(color: borderColor, width: error ? 1.3 : 1),
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -748,17 +668,11 @@ class SearchableSelect extends StatelessWidget {
                   value ?? hint,
                   style: TextStyle(
                     fontSize: value == null ? 11 : 12,
-                    color: value == null
-                        ? const Color(0xFFB6BFCC)
-                        : Ui.text,
+                    color: value == null ? const Color(0xFFB6BFCC) : Ui.text,
                   ),
                 ),
               ),
-              const Icon(
-                Icons.keyboard_arrow_down,
-                size: 18,
-                color: Ui.muted,
-              ),
+              const Icon(Icons.keyboard_arrow_down, size: 18, color: Ui.muted),
             ],
           ),
         ),
@@ -785,8 +699,7 @@ class _SearchableOptionsSheet extends StatefulWidget {
       _SearchableOptionsSheetState();
 }
 
-class _SearchableOptionsSheetState
-    extends State<_SearchableOptionsSheet> {
+class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
   String query = '';
 
   @override
@@ -815,9 +728,7 @@ class _SearchableOptionsSheetState
             children: [
               Text(
                 widget.title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                ),
+                style: const TextStyle(fontWeight: FontWeight.w800),
               ),
 
               const SizedBox(height: 12),
@@ -838,9 +749,7 @@ class _SearchableOptionsSheetState
 
               Expanded(
                 child: filteredItems.isEmpty
-                    ? const Center(
-                        child: Text('Pilihan tidak ditemukan.'),
-                      )
+                    ? const Center(child: Text('Pilihan tidak ditemukan.'))
                     : ListView.builder(
                         itemCount: filteredItems.length,
                         itemBuilder: (context, index) {
@@ -849,13 +758,9 @@ class _SearchableOptionsSheetState
 
                           return ListTile(
                             title: Text(item),
-                            subtitle:
-                                detail == null ? null : Text(detail),
+                            subtitle: detail == null ? null : Text(detail),
                             trailing: item == widget.selectedValue
-                                ? const Icon(
-                                    Icons.check,
-                                    color: Ui.blue,
-                                  )
+                                ? const Icon(Icons.check, color: Ui.blue)
                                 : null,
                             onTap: () {
                               Navigator.pop(context, item);

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../components/ui/kit.dart';
+import '../../../repositories/activity_repository.dart';
 
 /// Tambah / Edit materi (guru). Argumen String = mode edit.
 class TeacherMaterialFormPage extends StatefulWidget {
@@ -14,8 +15,10 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
   final desc = TextEditingController();
   final body = TextEditingController();
   final link = TextEditingController();
+  final _activityRepository = ActivityRepository();
   String? course;
   bool _init = false;
+  bool _saving = false;
 
   @override
   void didChangeDependencies() {
@@ -36,6 +39,35 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
 
   Widget _tool(Widget w) =>
       Padding(padding: const EdgeInsets.only(right: 12), child: w);
+
+  Future<void> _save({required bool edit}) async {
+    final materialName = title.text.trim();
+    if (materialName.isEmpty || _saving) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Judul materi wajib diisi.')),
+      );
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await _activityRepository.record(
+        action: edit ? 'update' : 'insert',
+        entity: 'material',
+        entityName: materialName,
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } catch (e) {
+      debugPrint('[TeacherMaterialForm] Gagal mencatat aktivitas: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim notifikasi aktivitas: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -66,11 +98,7 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
               const FieldLabel('Judul Materi', required: true),
               EduField(controller: title),
               const FieldLabel('Deskripsi Materi', required: true),
-              EduField(
-                hint: 'Deskripsi Materi',
-                maxLines: 3,
-                controller: desc,
-              ),
+              EduField(hint: 'Deskripsi Materi', maxLines: 3, controller: desc),
               const FieldLabel('Isi Materi', required: true),
               Container(
                 decoration: BoxDecoration(
@@ -92,11 +120,39 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
                       ),
                       child: Row(
                         children: [
-                          _tool(const Text('B', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w900))),
-                          _tool(const Text('I', style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic))),
-                          _tool(const Text('U', style: TextStyle(fontSize: 11, decoration: TextDecoration.underline))),
-                          _tool(const Icon(Icons.format_list_bulleted, size: 14)),
-                          _tool(const Icon(Icons.format_list_numbered, size: 14)),
+                          _tool(
+                            const Text(
+                              'B',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          _tool(
+                            const Text(
+                              'I',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontStyle: FontStyle.italic,
+                              ),
+                            ),
+                          ),
+                          _tool(
+                            const Text(
+                              'U',
+                              style: TextStyle(
+                                fontSize: 11,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                          _tool(
+                            const Icon(Icons.format_list_bulleted, size: 14),
+                          ),
+                          _tool(
+                            const Icon(Icons.format_list_numbered, size: 14),
+                          ),
                           _tool(const Icon(Icons.link, size: 14)),
                           _tool(const Icon(Icons.image_outlined, size: 14)),
                         ],
@@ -182,7 +238,7 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
               const SizedBox(height: 16),
               SolidBtn(
                 label: edit ? 'Simpan Perubahan' : 'Tambah Materi',
-                onTap: () => Navigator.pop(context),
+                onTap: _saving ? null : () => _save(edit: edit),
               ),
             ],
           ),

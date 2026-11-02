@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
+import '../../../repositories/activity_repository.dart';
 
 class TeacherCourseDetailPage extends StatefulWidget {
   const TeacherCourseDetailPage({super.key});
@@ -10,9 +11,16 @@ class TeacherCourseDetailPage extends StatefulWidget {
 }
 
 class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
+  final _activityRepository = ActivityRepository();
   int tab = 0;
 
-  static const _materi = ['Aljabar', 'Eksponen', 'Linear', 'Aljabar', 'Eksponen'];
+  static const _materi = [
+    'Aljabar',
+    'Eksponen',
+    'Linear',
+    'Aljabar',
+    'Eksponen',
+  ];
   static const _quiz = [
     ('Quiz 1 - Latihan Soal Aljabar', '10 Soal | 30 Menit'),
     ('Quiz 2 - Pengenalan Eksponen', '10 Soal | 30 Menit'),
@@ -33,11 +41,17 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
         const SizedBox(height: 10),
         const Row(
           children: [
-            Expanded(child: StatBox(value: '6', label: 'Materi')),
+            Expanded(
+              child: StatBox(value: '6', label: 'Materi'),
+            ),
             SizedBox(width: 10),
-            Expanded(child: StatBox(value: '3', label: 'Quiz')),
+            Expanded(
+              child: StatBox(value: '3', label: 'Quiz'),
+            ),
             SizedBox(width: 10),
-            Expanded(child: StatBox(value: '72%', label: 'Selesai')),
+            Expanded(
+              child: StatBox(value: '72%', label: 'Selesai'),
+            ),
           ],
         ),
         const SizedBox(height: 10),
@@ -106,7 +120,57 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
       title: 'Hapus $what?',
       message: 'Data yang dihapus tidak dapat dikembalikan.',
     );
-    if (ok && mounted) await showSuccessDialog(context, '$what Berhasil di Hapus');
+    if (ok && mounted) {
+      await showSuccessDialog(context, '$what Berhasil di Hapus');
+    }
+  }
+
+  Future<void> _addQuiz() async {
+    final title = TextEditingController();
+    final quizTitle = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tambah Quiz'),
+        content: TextField(
+          controller: title,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Judul quiz'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, title.text.trim()),
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+    title.dispose();
+
+    if (quizTitle == null || quizTitle.isEmpty || !mounted) return;
+
+    try {
+      await _activityRepository.record(
+        action: 'insert',
+        entity: 'quiz',
+        entityName: quizTitle,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Aktivitas tambah quiz terkirim ke admin.'),
+        ),
+      );
+    } catch (e) {
+      debugPrint('[TeacherCourseDetail] Gagal mencatat aktivitas quiz: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim aktivitas quiz: $e')),
+      );
+    }
   }
 
   List<Widget> _courseTab() => [
@@ -168,10 +232,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   ];
 
   List<Widget> _quizTab() => [
-    _manageButton(
-      'Tambah / Kelola Quiz',
-      () => Navigator.pushNamed(context, RouteNames.teacherQuizForm),
-    ),
+    _manageButton('Tambah / Kelola Quiz', _addQuiz),
     const SizedBox(height: 12),
     const Text(
       'Daftar Quiz',

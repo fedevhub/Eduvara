@@ -8,6 +8,20 @@ class AuthRepository {
 
   final ProfileRepository _profileRepository = ProfileRepository();
 
+  Future<void> _ensureActive(String userId) async {
+    final row = await _supabase
+        .from('user')
+        .select('status')
+        .eq('id_user', userId)
+        .maybeSingle();
+
+    final status = (row?['status'] ?? 'aktif').toString().toLowerCase();
+
+    if (status == 'nonaktif' || status == 'inactive' || status == 'false') {
+      throw Exception('Akun kamu dinonaktifkan. Hubungi admin.');
+    }
+  }
+
   Future<AuthUserModel> login(String email, String password) async {
     final response = await _supabase.auth.signInWithPassword(
       email: email.trim(),
@@ -32,6 +46,8 @@ class AuthRepository {
         throw Exception('Role akun tidak valid.');
       }
 
+      await _ensureActive(authUser.id);
+
       return profile;
     } catch (_) {
       await _supabase.auth.signOut();
@@ -47,6 +63,8 @@ class AuthRepository {
     }
 
     try {
+      await _ensureActive(authUser.id);
+
       return await _profileRepository.getProfile(
         userId: authUser.id,
         email: authUser.email ?? '',

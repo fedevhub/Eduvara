@@ -5,6 +5,8 @@ import '../../../components/navigation/app_bar.dart';
 import '../../../components/course/course_header.dart';
 import '../../../components/course/course_info.dart';
 import '../../../components/course/course_material_list.dart';
+import '../../../components/ui/kit.dart';
+import '../../../core/routes/route_names.dart';
 import '../../../models/course_model.dart';
 import '../../../models/materi_model.dart';
 
@@ -12,8 +14,7 @@ class AdminCourseDetailPage extends StatefulWidget {
   const AdminCourseDetailPage({super.key});
 
   @override
-  State<AdminCourseDetailPage> createState() =>
-      _AdminCourseDetailPageState();
+  State<AdminCourseDetailPage> createState() => _AdminCourseDetailPageState();
 }
 
 class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
@@ -43,6 +44,46 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
     }
 
     _fetchCourseDetail();
+  }
+
+  Future<void> _editCourse() async {
+    final changed = await Navigator.pushNamed(
+      context,
+      RouteNames.adminCourseForm,
+      arguments: _courseId,
+    );
+    if (changed == true) await _fetchCourseDetail();
+  }
+
+  Future<void> _deleteCourse() async {
+    final course = _course;
+    final id = _courseId;
+    if (course == null || id == null || id.isEmpty) {
+      _showMessage('ID course tidak valid.');
+      return;
+    }
+
+    final confirmed = await showConfirmDanger(
+      context,
+      title: 'Hapus Course?',
+      message: '${course.title} akan dihapus dari platform.',
+    );
+    if (!confirmed || !mounted) return;
+
+    try {
+      await _supabase.rpc('admin_delete_course', params: {'p_course_id': id});
+      if (!mounted) return;
+      await showSuccessDialog(context, 'Course berhasil dihapus!');
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      _showMessage('Gagal menghapus course: $e');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _fetchCourseDetail() async {
@@ -79,9 +120,8 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
       // 2. Mengambil nama pengajar dari profiles.
       String teacherName = '-';
 
-      final teacherId =
-          (courseData['teacher_id'] ?? courseData['pengajar_id'])
-              ?.toString();
+      final teacherId = (courseData['teacher_id'] ?? courseData['pengajar_id'])
+          ?.toString();
 
       if (teacherId != null && teacherId.isNotEmpty) {
         final teacherData = await _supabase
@@ -90,8 +130,7 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
             .eq('id', teacherId)
             .maybeSingle();
 
-        teacherName =
-            (teacherData?['full_name'] ?? '-').toString();
+        teacherName = (teacherData?['full_name'] ?? '-').toString();
       }
 
       // 3. Mengambil materi berdasarkan course_id.
@@ -113,11 +152,11 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
 
       // 4. Menyesuaikan data Supabase dengan model Course.
       final course = Course(
-        id: int.tryParse(id) ?? 0,
-        title: (courseData['title'] ?? courseData['name'] ?? '')
-            .toString(),
+        id: id,
+        title: (courseData['title'] ?? courseData['name'] ?? '').toString(),
         description: (courseData['description'] ?? '').toString(),
         teacher: teacherName,
+        status: (courseData['status'] ?? 'active').toString(),
       );
 
       if (!mounted) return;
@@ -148,11 +187,7 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.cloud_off_outlined,
-              size: 48,
-              color: Colors.grey,
-            ),
+            const Icon(Icons.cloud_off_outlined, size: 48, color: Colors.grey),
             const SizedBox(height: 12),
             Text(
               _errorMessage ?? 'Course tidak ditemukan.',
@@ -172,9 +207,7 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
 
   Widget _buildContent() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_errorMessage != null || _course == null) {
@@ -187,15 +220,20 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
         padding: const EdgeInsets.all(20),
         children: [
           CourseHeader(course: _course!),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: SoftBtn.edit(onTap: _editCourse)),
+              const SizedBox(width: 12),
+              Expanded(child: SoftBtn.delete(onTap: _deleteCourse)),
+            ],
+          ),
           const SizedBox(height: 18),
           CourseInfo(course: _course!),
           const SizedBox(height: 22),
           const Text(
             'Materi',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 10),
           if (_materials.isEmpty)
@@ -224,10 +262,7 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const EduvaraAppBar(
-        title: 'Detail Course',
-        showBack: true,
-      ),
+      appBar: const EduvaraAppBar(title: 'Detail Course', showBack: true),
       body: _buildContent(),
     );
   }
