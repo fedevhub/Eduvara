@@ -14,6 +14,11 @@ class _UserFormPageState extends State<UserFormPage> {
   final _formKey = GlobalKey<FormState>();
   final SupabaseClient _db = Supabase.instance.client;
 
+  // Samakan dengan nilai di Supabase.initialize(...) pada main.dart.
+  // Dipakai untuk membuat akun baru tanpa menimpa sesi admin.
+  static const String _supabaseUrl = 'ISI_DENGAN_SUPABASE_URL';
+  static const String _supabaseAnonKey = 'ISI_DENGAN_SUPABASE_ANON_KEY';
+
   final name = TextEditingController();
   final email = TextEditingController();
   final password = TextEditingController();
@@ -280,7 +285,7 @@ class _UserFormPageState extends State<UserFormPage> {
   /// Membuat akun login lewat client terpisah supaya sesi admin yang sedang
   /// login tidak tertimpa oleh akun baru, lalu mengisi data di profiles.
   Future<void> _createUser() async {
-    final tempClient = SupabaseClient(_db.supabaseUrl, _db.supabaseKey);
+    final tempClient = SupabaseClient(_supabaseUrl, _supabaseAnonKey);
 
     try {
       final response = await tempClient.auth.signUp(

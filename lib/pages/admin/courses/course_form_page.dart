@@ -179,7 +179,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   Future<void> _loadCourse() async {
     final data = await _db
-        .from('courses')
+        .from('course')
         .select()
         .eq('id', _editingCourseId!)
         .single();
@@ -316,7 +316,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
       if (_editingCourseId == null) {
         final inserted = await _db
-            .from('courses')
+            .from('course')
             .insert(courseData)
             .select('id')
             .single();
@@ -324,7 +324,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
         courseId = inserted['id'].toString();
       } else {
         await _db
-            .from('courses')
+            .from('course')
             .update(courseData)
             .eq('id', _editingCourseId!);
 

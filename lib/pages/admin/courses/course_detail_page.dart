@@ -67,7 +67,7 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
     try {
       // 1. Mengambil data course dari Supabase.
       final courseData = await _supabase
-          .from('courses')
+          .from('course')
           .select()
           .eq('id', id)
           .maybeSingle();
