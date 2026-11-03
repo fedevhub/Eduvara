@@ -48,7 +48,7 @@ class StudentDashboardPage extends StatelessWidget {
                 ],
               ),
             ),
-            DarkAvatar(size: 34),
+            DarkAvatar(name: 'Fitri Rachmania', size: 34),
           ],
         ),
         const SizedBox(height: 14),

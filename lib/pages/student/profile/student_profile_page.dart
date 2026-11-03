@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../components/ui/kit.dart';
+import '../../../core/utils/formatters.dart';
 import '../../../core/routes/route_names.dart';
 
 class StudentProfilePage extends StatelessWidget {
@@ -25,7 +26,16 @@ class StudentProfilePage extends StatelessWidget {
                   width: 64,
                   height: 64,
                   decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-                  child: const Icon(Icons.person, size: 34, color: Ui.navy),
+                  child: Center(
+                    child: Text(
+                      Formatters.initials('Fitri Rachmania'),
+                      style: const TextStyle(
+                        color: Ui.navy,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 const Text(

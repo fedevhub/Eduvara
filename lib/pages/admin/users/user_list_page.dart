@@ -135,7 +135,7 @@ class _UserListPageState extends State<UserListPage> {
         onTap: () => _openDetail(u),
         child: Row(
           children: [
-            const DarkAvatar(size: 30),
+            DarkAvatar(name: u.name, size: 30),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
