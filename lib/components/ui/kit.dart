@@ -902,12 +902,33 @@ class EduBottomNav extends StatelessWidget {
   final int current;
   const EduBottomNav({super.key, required this.role, required this.current});
 
-  List<_NavItem> get _items => const [
-    _NavItem(Icons.home_outlined, 'Home', '/admin/dashboard'),
-    _NavItem(Icons.people_outline, 'Pengguna', '/admin/users'),
-    _NavItem(Icons.menu_book_outlined, 'Course', '/admin/courses'),
-    _NavItem(Icons.settings_outlined, 'Setting', '/admin/profile'),
-  ];
+  List<_NavItem> get _items => switch (role) {
+    'admin' => const [
+      _NavItem(Icons.home_outlined, 'Home', '/admin/dashboard'),
+      _NavItem(Icons.people_outline, 'Pengguna', '/admin/users'),
+      _NavItem(Icons.menu_book_outlined, 'Course', '/admin/courses'),
+      _NavItem(Icons.settings_outlined, 'Setting', '/admin/profile'),
+    ],
+    'teacher' => const [
+      _NavItem(Icons.home_outlined, 'Home', '/teacher/dashboard'),
+      _NavItem(Icons.menu_book_outlined, 'Course', '/teacher/courses'),
+      _NavItem(Icons.people_outline, 'Siswa', '/teacher/students'),
+      _NavItem(Icons.history, 'History', '/teacher/history'),
+      _NavItem(Icons.person_outline, 'Profile', '/teacher/profile'),
+    ],
+    'student' => const [
+      _NavItem(Icons.home_outlined, 'Home', '/student/dashboard'),
+      _NavItem(Icons.menu_book_outlined, 'Course', '/student/courses'),
+      _NavItem(Icons.history, 'History', '/student/history'),
+      _NavItem(
+        Icons.notifications_none,
+        'Notification',
+        '/student/notifications',
+      ),
+      _NavItem(Icons.person_outline, 'Profile', '/student/profile'),
+    ],
+    _ => throw ArgumentError.value(role, 'role', 'Unknown navigation role'),
+  };
 
   @override
   Widget build(BuildContext context) {
