@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 
@@ -10,9 +11,133 @@ class StudentCourseDetailPage extends StatefulWidget {
 }
 
 class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
+  final _db = Supabase.instance.client;
+
   int tab = 0;
+  bool _loading = true;
+  String? _error;
+  String? _courseId;
+
+  Map<String, dynamic>? _course;
+  List<Map<String, dynamic>> _materials = [];
+  List<Map<String, dynamic>> _quizzes = [];
+  Set<String> _doneMaterials = {};
+  Set<String> _doneQuizzes = {};
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_courseId != null) return;
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args is Map && args['course_id'] != null) {
+      _courseId = args['course_id'].toString();
+      _load();
+    } else {
+      _loading = false;
+      _error = 'Course tidak ditemukan';
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
+
+      final results = await Future.wait([
+        _db.from('courses').select().eq('id', _courseId!).single(),
+        _db
+            .from('materials')
+            .select()
+            .eq('course_id', _courseId!)
+            .order('order_no'),
+        _db
+            .from('quizzes')
+            .select()
+            .eq('course_id', _courseId!)
+            .order('order_no'),
+      ]);
+
+      final materials = List<Map<String, dynamic>>.from(results[1] as List);
+      final quizzes = List<Map<String, dynamic>>.from(results[2] as List);
+
+      final matIds = materials.map((e) => e['id']).toList();
+      final quizIds = quizzes.map((e) => e['id']).toList();
+
+      final doneMat = matIds.isEmpty
+          ? []
+          : await _db
+                .from('material_progress')
+                .select('material_id')
+                .eq('user_id', uid)
+                .eq('completed', true)
+                .inFilter('material_id', matIds);
+      final doneQuiz = quizIds.isEmpty
+          ? []
+          : await _db
+                .from('quiz_attempts')
+                .select('quiz_id')
+                .eq('user_id', uid)
+                .eq('completed', true)
+                .inFilter('quiz_id', quizIds);
+
+      if (!mounted) return;
+      setState(() {
+        _course = Map<String, dynamic>.from(results[0] as Map);
+        _materials = materials;
+        _quizzes = quizzes;
+        _doneMaterials = {
+          for (final r in doneMat) r['material_id'].toString(),
+        };
+        _doneQuizzes = {for (final r in doneQuiz) r['quiz_id'].toString()};
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  String _formatDate(dynamic raw) {
+    if (raw == null) return '-';
+    final d = DateTime.tryParse(raw.toString())?.toLocal();
+    if (d == null) return '-';
+    const hari = [
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
+    ];
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${hari[d.weekday - 1]}, ${two(d.day)}-${two(d.month)}-${d.year}';
+  }
+
+  /// Item terbuka jika sudah selesai, atau item pertama yang belum selesai.
+  /// Item setelahnya terkunci.
+  List<_ItemState> _states(List<Map<String, dynamic>> list, Set<String> done) {
+    bool openGiven = false;
+    return list.map((e) {
+      final isDone = done.contains(e['id'].toString());
+      var isOpen = false;
+      if (!isDone && !openGiven) {
+        isOpen = true;
+        openGiven = true;
+      }
+      return _ItemState(isOpen, isDone);
+    }).toList();
+  }
 
   Widget _item(
+    Map<String, dynamic> data,
     String title,
     String sub, {
     bool open = false,
@@ -22,13 +147,21 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
       borderColor: open ? Ui.blue : (done ? Ui.green : null),
       padding: const EdgeInsets.all(12),
       onTap: open || done
-          ? () => Navigator.pushNamed(
-              context,
-              tab == 0
-                  ? RouteNames.studentMaterialDetail
-                  : RouteNames.studentQuiz,
-              arguments: {'entity_name': title},
-            )
+          ? () async {
+              await Navigator.pushNamed(
+                context,
+                tab == 0
+                    ? RouteNames.studentMaterialDetail
+                    : RouteNames.studentQuiz,
+                arguments: {
+                  'entity_name': title,
+                  'id': data['id'],
+                  'course_id': _courseId,
+                },
+              );
+              // refresh progress setelah kembali dari materi/kuis
+              if (mounted) _load();
+            }
           : null,
       child: Row(
         children: [
@@ -77,78 +210,153 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) => EduScaffold(
-    body: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const BackLink(),
-        const Text(
-          'Matematika Kelas 10',
-          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
-        ),
-        const Text('Budi Santoso', style: TextStyle(fontSize: 9)),
-        const SizedBox(height: 10),
-        const Row(
-          children: [
-            Expanded(
-              child: StatBox(value: '6', label: 'Materi'),
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: StatBox(value: '1/6', label: 'Berjalan'),
-            ),
-            SizedBox(width: 10),
-            Expanded(
-              child: StatBox(value: '10%', label: 'Progress'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'Kuasai aljabar, geometri, dan kalkulus dasar untuk persiapan ujian.',
-          style: TextStyle(fontSize: 9),
-        ),
-        const SizedBox(height: 10),
-        SegTabs(
-          labels: const ['Course', 'Quiz'],
-          index: tab,
-          onChanged: (i) => setState(() => tab = i),
-        ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                tab == 0 ? 'Daftar Course' : 'Daftar Quiz',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Text(
-              tab == 0 ? '0/6' : '1/3',
-              style: const TextStyle(fontSize: 10, color: Ui.muted),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        if (tab == 0) ...[
-          _item('Aljabar', 'Senin, 15-09-2026', open: true),
-          _item('Eksponen', 'Senin, 15-09-2026'),
-          _item('Linear', 'Senin, 15-09-2026'),
-          _item('Aljabar', 'Senin, 15-09-2026'),
-        ] else ...[
+  List<Widget> _buildList() {
+    if (tab == 0) {
+      if (_materials.isEmpty) return [_empty('Belum ada materi')];
+      final st = _states(_materials, _doneMaterials);
+      return [
+        for (var i = 0; i < _materials.length; i++)
           _item(
-            'Quiz 1 - Latihan Soal Aljabar',
-            '10 Soal | 30 Menit',
-            open: true,
+            _materials[i],
+            _materials[i]['title']?.toString() ?? '-',
+            _formatDate(_materials[i]['scheduled_at']),
+            open: st[i].open,
+            done: st[i].done,
           ),
-          _item('Quiz 2 - Soal Eksponen', '20 Soal | 60 Menit'),
-          _item('Quiz 3 - UH Aljabar', '20 Soal | 60 Menit'),
-        ],
-      ],
+      ];
+    }
+    if (_quizzes.isEmpty) return [_empty('Belum ada quiz')];
+    final st = _states(_quizzes, _doneQuizzes);
+    return [
+      for (var i = 0; i < _quizzes.length; i++)
+        _item(
+          _quizzes[i],
+          _quizzes[i]['title']?.toString() ?? '-',
+          '${_quizzes[i]['question_count'] ?? 0} Soal | '
+          '${_quizzes[i]['duration_minutes'] ?? 0} Menit',
+          open: st[i].open,
+          done: st[i].done,
+        ),
+    ];
+  }
+
+  Widget _empty(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    child: Center(
+      child: Text(text, style: const TextStyle(fontSize: 10, color: Ui.muted)),
     ),
   );
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const EduScaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_error != null || _course == null) {
+      return EduScaffold(
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const BackLink(),
+            const SizedBox(height: 24),
+            Center(
+              child: Text(
+                _error ?? 'Data tidak tersedia',
+                style: const TextStyle(fontSize: 10, color: Ui.muted),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Center(
+              child: TextButton(
+                onPressed: _courseId == null ? null : _load,
+                child: const Text('Coba lagi'),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final totalMat = _materials.length;
+    final doneMat = _doneMaterials.length;
+    final progress = totalMat == 0 ? 0 : ((doneMat / totalMat) * 100).round();
+    final totalQuiz = _quizzes.length;
+    final doneQuiz = _doneQuizzes.length;
+
+    return EduScaffold(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const BackLink(),
+          Text(
+            _course!['title']?.toString() ?? '-',
+            style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+          ),
+          Text(
+            _course!['teacher_name']?.toString() ?? '-',
+            style: const TextStyle(fontSize: 9),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: StatBox(value: '$totalMat', label: 'Materi'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: StatBox(
+                  value: '$doneMat/$totalMat',
+                  label: 'Berjalan',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: StatBox(value: '$progress%', label: 'Progress'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            _course!['description']?.toString() ?? '',
+            style: const TextStyle(fontSize: 9),
+          ),
+          const SizedBox(height: 10),
+          SegTabs(
+            labels: const ['Course', 'Quiz'],
+            index: tab,
+            onChanged: (i) => setState(() => tab = i),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  tab == 0 ? 'Daftar Course' : 'Daftar Quiz',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Text(
+                tab == 0 ? '$doneMat/$totalMat' : '$doneQuiz/$totalQuiz',
+                style: const TextStyle(fontSize: 10, color: Ui.muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._buildList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _ItemState {
+  final bool open;
+  final bool done;
+  const _ItemState(this.open, this.done);
 }
