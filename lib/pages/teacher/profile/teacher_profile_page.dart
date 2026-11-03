@@ -14,7 +14,7 @@ class TeacherProfilePage extends StatelessWidget {
         const SizedBox(height: 6),
         const Text('Profil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
         const SizedBox(height: 14),
-        const Center(child: DarkAvatar(size: 64)),
+        const Center(child: DarkAvatar(name: 'Budi Santoso', size: 64)),
         const SizedBox(height: 8),
         const Center(
           child: Text('Budi Santoso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),

@@ -46,7 +46,7 @@ class _TeacherStudentListPageState extends State<TeacherStudentListPage> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
                 child: Row(
                   children: [
-                    const DarkAvatar(size: 28),
+                    DarkAvatar(name: u.name, size: 28),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Column(

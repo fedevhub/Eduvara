@@ -265,7 +265,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 onTap: _openNotifications,
               ),
               const SizedBox(width: 10),
-              const DarkAvatar(size: 34),
+              DarkAvatar(name: _adminName, size: 34),
             ],
           ),
           const SizedBox(height: 14),

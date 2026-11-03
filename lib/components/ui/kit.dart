@@ -1,5 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import '../../core/utils/formatters.dart';
 
 class Ui {
   static const bg = Color(0xFFF8FAFC);
@@ -163,15 +164,29 @@ class PageTitle extends StatelessWidget {
 
 class DarkAvatar extends StatelessWidget {
   final double size;
-  const DarkAvatar({super.key, this.size = 36});
+  final String? name;
+  const DarkAvatar({super.key, this.size = 36, this.name});
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: const BoxDecoration(color: Ui.navy, shape: BoxShape.circle),
-    child: Icon(Icons.person, color: Colors.white, size: size * 0.55),
-  );
+  Widget build(BuildContext context) {
+    final initials = Formatters.initials(name ?? '');
+    return Container(
+      width: size,
+      height: size,
+      decoration: const BoxDecoration(color: Ui.navy, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: initials.isEmpty
+          ? Icon(Icons.person, color: Colors.white, size: size * 0.55)
+          : Text(
+              initials,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: size * 0.36,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+    );
+  }
 }
 
 enum PillKind { active, inactive, running, done, locked, draft }

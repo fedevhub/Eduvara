@@ -50,7 +50,7 @@ class TeacherDashboardPage extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            const DarkAvatar(size: 34),
+            const DarkAvatar(name: 'Budi Santoso', size: 34),
           ],
         ),
         const SizedBox(height: 14),

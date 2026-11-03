@@ -194,15 +194,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                     child: BackLink(),
                   ),
                   const SizedBox(height: 4),
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.person, size: 34, color: Ui.navy),
-                  ),
+                  DarkAvatar(name: user.name, size: 64),
                   const SizedBox(height: 8),
                   Text(
                     user.name,
@@ -238,10 +230,6 @@ class _UserDetailPageState extends State<UserDetailPage> {
                         ),
                         const SizedBox(height: 8),
                         _row('Email', user.email),
-                        _row(
-                          'Password',
-                          'Tidak dapat ditampilkan (dikelola Supabase Auth)',
-                        ),
                         _row('Role', user.roleLabel),
                         _row('Status', active ? 'Aktif' : 'Nonaktif'),
                         if (user.role == 'teacher') ...[
