@@ -38,6 +38,7 @@ dependencies:
   provider: ^6.1.2
   shared_preferences: ^2.3.2
   supabase_flutter: ^2.15.4
+  file_picker: ^11.0.3
 
 dev_dependencies:
   flutter_test:

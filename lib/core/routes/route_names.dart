@@ -23,6 +23,10 @@ class RouteNames {
 
   // Teacher
   static const teacherDashboard = '/teacher/dashboard';
+  static const teacherCourses = '/teacher/courses';
+  static const teacherStudents = '/teacher/students';
+  static const teacherHistory = '/teacher/history';
+  static const teacherProfile = '/teacher/profile';
   static const teacherNotifications = '/teacher/notifications';
   static const teacherCourseDetail = '/teacher/courses/detail';
   static const teacherStudentDetail = '/teacher/students/detail';
@@ -33,6 +37,9 @@ class RouteNames {
   // Student
   static const studentDashboard = '/student/dashboard';
   static const studentCourses = '/student/courses';
+  static const studentHistory = '/student/history';
+  static const studentNotifications = '/student/notifications';
+  static const studentProfile = '/student/profile';
   static const studentCourseDetail = '/student/courses/detail';
   static const studentMaterialDetail = '/student/materials/detail';
   static const studentQuiz = '/student/quiz';
