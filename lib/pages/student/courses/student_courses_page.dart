@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 import '../../../models/course_model.dart';
 import '../../../repositories/course_repository.dart';
 
 enum _St { done, running, locked }
+
+class _CourseRow {
+  final Course course;
+  final _St status;
+  final int pct;
+  const _CourseRow(this.course, this.status, this.pct);
+}
 
 class StudentCoursesPage extends StatefulWidget {
   const StudentCoursesPage({super.key});
@@ -16,20 +24,74 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
   int filter = 0;
   String query = '';
   final CourseRepository _repository = CourseRepository();
-  late Future<List<Course>> _courses;
+  final _db = Supabase.instance.client;
+  late Future<List<_CourseRow>> _rows;
 
   @override
   void initState() {
     super.initState();
-    _courses = _repository.getCourses();
+    _rows = _load();
   }
 
-  _St _status(int index, Course course) {
-    final status = course.status.toLowerCase();
-    if (status.contains('selesai') || index == 0) return _St.done;
-    if (status.contains('kunci') || index > 1) return _St.locked;
-    return _St.running;
+  Future<List<_CourseRow>> _load() async {
+    final courses = await _repository.getCourses();
+    if (courses.isEmpty) return [];
+
+    final uid = _db.auth.currentUser?.id;
+    if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
+
+    final courseIds = courses.map((c) => c.id.toString()).toList();
+
+    // total materi per course
+    final materials = await _db
+        .from('materials')
+        .select('id, course_id')
+        .inFilter('course_id', courseIds);
+
+    final totalByCourse = <String, int>{};
+    final courseByMaterial = <String, String>{};
+    for (final m in materials) {
+      final cid = m['course_id'].toString();
+      totalByCourse[cid] = (totalByCourse[cid] ?? 0) + 1;
+      courseByMaterial[m['id'].toString()] = cid;
+    }
+
+    // materi yang sudah diselesaikan siswa
+    final doneByCourse = <String, int>{};
+    if (courseByMaterial.isNotEmpty) {
+      final progress = await _db
+          .from('material_progress')
+          .select('material_id')
+          .eq('user_id', uid)
+          .eq('completed', true)
+          .inFilter('material_id', courseByMaterial.keys.toList());
+      for (final p in progress) {
+        final cid = courseByMaterial[p['material_id'].toString()];
+        if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
+      }
+    }
+
+    // hitung status: terkunci jika course sebelumnya belum selesai
+    final rows = <_CourseRow>[];
+    var previousDone = true;
+    for (final c in courses) {
+      final cid = c.id.toString();
+      final total = totalByCourse[cid] ?? 0;
+      final done = doneByCourse[cid] ?? 0;
+      final pct = total == 0 ? 0 : ((done / total) * 100).round();
+      final isDone = total > 0 && done >= total;
+
+      final st = !previousDone
+          ? _St.locked
+          : (isDone ? _St.done : _St.running);
+
+      rows.add(_CourseRow(c, st, pct));
+      previousDone = isDone;
+    }
+    return rows;
   }
+
+  void _reload() => setState(() => _rows = _load());
 
   bool _match(_St s) => switch (filter) {
     1 => s == _St.done, 2 => s == _St.running, 3 => s == _St.locked, _ => true,
@@ -40,7 +102,17 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     final card = EduCard(
       borderColor: st == _St.locked ? null : color,
       padding: const EdgeInsets.all(12),
-      onTap: st == _St.locked ? null : () => Navigator.pushNamed(context, RouteNames.studentCourseDetail, arguments: course.id),
+      onTap: st == _St.locked
+          ? null
+          : () async {
+              await Navigator.pushNamed(
+                context,
+                RouteNames.studentCourseDetail,
+                arguments: {'course_id': course.id},
+              );
+              // refresh progress setelah kembali dari detail
+              if (mounted) _reload();
+            },
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [Expanded(child: Text(course.title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800))),
           Pill(switch (st) { _St.done => 'Selesai', _St.running => 'Berjalan', _St.locked => 'Terkunci' }, kind: switch (st) { _St.done => PillKind.done, _St.running => PillKind.running, _St.locked => PillKind.locked })]),
@@ -66,15 +138,24 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       const SizedBox(height: 10),
       FilterChips(labels: const ['Semua', 'Selesai', 'Berjalan', 'Terkunci'], index: filter, onChanged: (i) => setState(() => filter = i)),
       const SizedBox(height: 12),
-      FutureBuilder<List<Course>>(
-        future: _courses,
+      FutureBuilder<List<_CourseRow>>(
+        future: _rows,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
-          if (snapshot.hasError) return const Text('Course belum dapat dimuat. Coba buka kembali halaman ini.');
-          final courses = snapshot.data ?? [];
-          final visible = courses.asMap().entries.where((e) => _match(_status(e.key, e.value)) && e.value.title.toLowerCase().contains(query.toLowerCase())).toList();
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()));
+          }
+          if (snapshot.hasError) {
+            return Column(children: [
+              const Text('Course belum dapat dimuat.'),
+              TextButton(onPressed: _reload, child: const Text('Coba lagi')),
+            ]);
+          }
+          final rows = snapshot.data ?? [];
+          final visible = rows
+              .where((r) => _match(r.status) && r.course.title.toLowerCase().contains(query.toLowerCase()))
+              .toList();
           if (visible.isEmpty) return const Padding(padding: EdgeInsets.all(16), child: Text('Course tidak ditemukan.'));
-          return Column(children: [for (final e in visible) _card(e.value, _status(e.key, e.value), _status(e.key, e.value) == _St.done ? 100 : 60)]);
+          return Column(children: [for (final r in visible) _card(r.course, r.status, r.pct)]);
         },
       ),
     ]),

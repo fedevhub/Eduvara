@@ -1,9 +1,123 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../components/ui/kit.dart';
 import '../../core/routes/route_names.dart';
+import '../../models/course_model.dart';
+import '../../repositories/course_repository.dart';
 
-class StudentDashboardPage extends StatelessWidget {
+enum _St { done, running, locked }
+
+class _CourseInfo {
+  final Course course;
+  final _St status;
+  final int total;
+  final int pct;
+  const _CourseInfo(this.course, this.status, this.total, this.pct);
+}
+
+class _DashData {
+  final String name;
+  final List<_CourseInfo> courses;
+  const _DashData(this.name, this.courses);
+
+  int count(_St s) => courses.where((c) => c.status == s).length;
+  _CourseInfo? first(_St s) {
+    for (final c in courses) {
+      if (c.status == s) return c;
+    }
+    return null;
+  }
+}
+
+class StudentDashboardPage extends StatefulWidget {
   const StudentDashboardPage({super.key});
+
+  @override
+  State<StudentDashboardPage> createState() => _StudentDashboardPageState();
+}
+
+class _StudentDashboardPageState extends State<StudentDashboardPage> {
+  final _db = Supabase.instance.client;
+  final _repository = CourseRepository();
+  late Future<_DashData> _data;
+
+  @override
+  void initState() {
+    super.initState();
+    _data = _load();
+  }
+
+  void _reload() => setState(() => _data = _load());
+
+  Future<_DashData> _load() async {
+    final user = _db.auth.currentUser;
+    if (user == null) throw 'Sesi login berakhir, silakan login ulang';
+
+    // nama siswa
+    final profile = await _db
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+    final name = (profile?['full_name'] ??
+            user.userMetadata?['full_name'] ??
+            user.email ??
+            '-')
+        .toString();
+
+    final courses = await _repository.getCourses();
+    if (courses.isEmpty) return _DashData(name, const []);
+
+    final courseIds = courses.map((c) => c.id.toString()).toList();
+
+    // total materi per course
+    final materials = await _db
+        .from('materials')
+        .select('id, course_id')
+        .inFilter('course_id', courseIds);
+
+    final totalByCourse = <String, int>{};
+    final courseByMaterial = <String, String>{};
+    for (final m in materials) {
+      final cid = m['course_id'].toString();
+      totalByCourse[cid] = (totalByCourse[cid] ?? 0) + 1;
+      courseByMaterial[m['id'].toString()] = cid;
+    }
+
+    // materi yang sudah diselesaikan siswa
+    final doneByCourse = <String, int>{};
+    if (courseByMaterial.isNotEmpty) {
+      final progress = await _db
+          .from('material_progress')
+          .select('material_id')
+          .eq('user_id', user.id)
+          .eq('completed', true)
+          .inFilter('material_id', courseByMaterial.keys.toList());
+      for (final p in progress) {
+        final cid = courseByMaterial[p['material_id'].toString()];
+        if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
+      }
+    }
+
+    // status: terkunci jika course sebelumnya belum selesai
+    final infos = <_CourseInfo>[];
+    var previousDone = true;
+    for (final c in courses) {
+      final cid = c.id.toString();
+      final total = totalByCourse[cid] ?? 0;
+      final done = doneByCourse[cid] ?? 0;
+      final pct = total == 0 ? 0 : ((done / total) * 100).round();
+      final isDone = total > 0 && done >= total;
+
+      final st = !previousDone
+          ? _St.locked
+          : (isDone ? _St.done : _St.running);
+
+      infos.add(_CourseInfo(c, st, total, pct));
+      previousDone = isDone;
+    }
+    return _DashData(name, infos);
+  }
 
   Widget _metric(String value, String label) => Expanded(
     child: Container(
@@ -28,27 +142,119 @@ class StudentDashboardPage extends StatelessWidget {
     ),
   );
 
-  @override
-  Widget build(BuildContext context) => EduScaffold(
-    bottom: const EduBottomNav(role: 'student', current: 0),
-    body: Column(
+  Widget _runningCard(_CourseInfo info) => EduCard(
+    borderColor: Ui.blue,
+    padding: const EdgeInsets.all(12),
+    onTap: () async {
+      await Navigator.pushNamed(
+        context,
+        RouteNames.studentCourseDetail,
+        arguments: {'course_id': info.course.id},
+      );
+      // refresh progress setelah kembali dari detail
+      if (mounted) _reload();
+    },
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                info.course.title,
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+              ),
+              Text(
+                '${info.course.teacher} • ${info.total} Materi',
+                style: const TextStyle(fontSize: 8.5),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${info.pct}% Selesai',
+                style: const TextStyle(
+                  fontSize: 8,
+                  fontWeight: FontWeight.w600,
+                  color: Ui.blue,
+                ),
+              ),
+              const SizedBox(height: 3),
+              ProgressLine(value: info.pct / 100),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: Ui.blue,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
+        ),
+      ],
+    ),
+  );
+
+  Widget _lockedCard(_CourseInfo info) => LockedCard(
+    text: 'Selesaikan Course Sebelumnya',
+    child: EduCard(
+      padding: const EdgeInsets.all(12),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  info.course.title,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  '${info.course.teacher} • ${info.total} Materi',
+                  style: const TextStyle(fontSize: 8.5),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  Widget _message(String text) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    child: Center(
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 10, color: Ui.muted),
+        textAlign: TextAlign.center,
+      ),
+    ),
+  );
+
+  Widget _content(_DashData d) {
+    final running = d.first(_St.running);
+    final locked = d.first(_St.locked);
+
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Panel Student', style: TextStyle(fontSize: 11)),
+                  const Text('Panel Student', style: TextStyle(fontSize: 11)),
                   Text(
-                    'Fitri Rachmania',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                    d.name,
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                   ),
                 ],
               ),
             ),
-            DarkAvatar(name: 'Fitri Rachmania', size: 34),
+            DarkAvatar(name: d.name, size: 34),
           ],
         ),
         const SizedBox(height: 14),
@@ -73,11 +279,11 @@ class StudentDashboardPage extends StatelessWidget {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  _metric('1', 'Selesai'),
+                  _metric('${d.count(_St.done)}', 'Selesai'),
                   const SizedBox(width: 8),
-                  _metric('1', 'Berjalan'),
+                  _metric('${d.count(_St.running)}', 'Berjalan'),
                   const SizedBox(width: 8),
-                  _metric('3', 'Terkunci'),
+                  _metric('${d.count(_St.locked)}', 'Terkunci'),
                 ],
               ),
             ],
@@ -107,73 +313,44 @@ class StudentDashboardPage extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-        EduCard(
-          borderColor: Ui.blue,
-          padding: const EdgeInsets.all(12),
-          onTap: () =>
-              Navigator.pushNamed(context, RouteNames.studentCourseDetail),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text(
-                      'Matematika Kelas 10',
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                    ),
-                    Text('Budi Santoso • 5 Materi', style: TextStyle(fontSize: 8.5)),
-                    SizedBox(height: 8),
-                    Text(
-                      '60% Selesai',
-                      style: TextStyle(
-                        fontSize: 8,
-                        fontWeight: FontWeight.w600,
-                        color: Ui.blue,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    ProgressLine(value: 0.6),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: Ui.blue,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 10),
-        LockedCard(
-          text: 'Selesaikan Course Sebelumnya',
-          child: EduCard(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: const [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Matematika Kelas 10',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
-                      ),
-                      Text('Budi Santoso • 5 Materi', style: TextStyle(fontSize: 8.5)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
+        if (d.courses.isEmpty)
+          _message('Belum ada course.')
+        else ...[
+          if (running != null) _runningCard(running),
+          if (running != null && locked != null) const SizedBox(height: 10),
+          if (locked != null) _lockedCard(locked),
+          if (running == null && locked == null)
+            _message('Hebat! Semua course sudah selesai.'),
+        ],
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => EduScaffold(
+    bottom: const EduBottomNav(role: 'student', current: 0),
+    body: FutureBuilder<_DashData>(
+      future: _data,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return Column(
+            children: [
+              const SizedBox(height: 40),
+              const Text(
+                'Dashboard belum dapat dimuat.',
+                style: TextStyle(fontSize: 11, color: Ui.muted),
+              ),
+              TextButton(onPressed: _reload, child: const Text('Coba lagi')),
+            ],
+          );
+        }
+        return _content(snapshot.data!);
+      },
     ),
   );
 }
