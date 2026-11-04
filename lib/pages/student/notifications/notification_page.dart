@@ -42,14 +42,6 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
     }
   }
 
-  void _reload() {
-    final next = _load();
-    if (!mounted) return;
-    setState(() {
-      _items = next;
-    });
-  }
-
   String _two(int n) => n.toString().padLeft(2, '0');
 
   DateTime? _date(dynamic raw) =>
@@ -149,14 +141,12 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
               );
             }
             if (snapshot.hasError) {
-              return Column(
-                children: [
-                  const Text('Notifikasi belum dapat dimuat.'),
-                  TextButton(
-                    onPressed: _reload,
-                    child: const Text('Coba lagi'),
-                  ),
-                ],
+              return const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                  'Notifikasi belum dapat dimuat.',
+                  style: TextStyle(fontSize: 10, color: Ui.muted),
+                ),
               );
             }
             final rows = snapshot.data ?? [];

@@ -22,17 +22,17 @@ class TeacherQuizFormPage extends StatefulWidget {
 }
 
 class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
-  static const _table = 'quiz';
-  static const _idKeys = ['id_quiz', 'id', 'quiz_id', 'quizid', 'uuid'];
+  static const _table = 'quizzes';
+  static const _idKeys = ['id'];
 
   /// Kemungkinan nama kolom di tabel quiz untuk tiap isian form.
   /// Kode mencoba berurutan sampai ketemu yang benar-benar ada.
   static const _candidates = <String, List<String>>{
-    'course': ['id_course', 'course_id', 'courses_id', 'id_courses', 'course'],
-    'title': ['nama_quiz', 'title', 'judul', 'judul_quiz', 'quiz_title', 'name', 'nama'],
-    'duration': ['durasi', 'duration', 'duration_minutes', 'waktu'],
-    'min': ['nilai_minimal', 'nilai_minimum', 'nilai_min', 'min_nilai', 'minimal_nilai', 'min_score', 'passing_score', 'kkm'],
-    'owner': ['id_guru', 'id_teacher', 'id_user', 'created_by', 'teacher_id', 'guru_id', 'user_id'],
+    'course': ['course_id'],
+    'title': ['title'],
+    'duration': ['duration_minutes'],
+    'min': ['passing_score'],
+    'owner': [],
   };
   static const _labels = {
     'course': 'course',
@@ -63,6 +63,7 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
   bool _init = false;
   bool _loading = true;
   bool _saving = false;
+  String _quizStatus = 'draft';
   String? _loadError;
 
   @override
@@ -84,7 +85,7 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
       }
     } else if (arg is Map) {
       final id = (arg['id'] ?? arg['quiz_id'])?.toString();
-      if (id != null && _numeric.hasMatch(id)) _quizId = id;
+      if (id != null && id.isNotEmpty) _quizId = id;
       _courseId = arg['course_id']?.toString();
     }
     _load();
@@ -123,8 +124,11 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
 
   /// Ambil nama kolom yang ditolak dari pesan error Postgrest.
   String? _missingColumn(PostgrestException e) {
-    final m = RegExp(r"Could not find the '([^']+)' column").firstMatch(e.message) ??
-        RegExp(r'column (?:\w+\.)?"?(\w+)"? does not exist').firstMatch(e.message);
+    final m =
+        RegExp(r"Could not find the '([^']+)' column").firstMatch(e.message) ??
+        RegExp(
+          r'column (?:\w+\.)?"?(\w+)"? does not exist',
+        ).firstMatch(e.message);
     return m?.group(1);
   }
 
@@ -172,7 +176,9 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
           orElse: () => '',
         );
         if (field.isEmpty) rethrow;
-        debugPrint('[TeacherQuizForm] kolom "$missing" tidak ada, coba nama lain');
+        debugPrint(
+          '[TeacherQuizForm] kolom "$missing" tidak ada, coba nama lain',
+        );
         _pick[field] = (_pick[field] ?? 0) + 1;
       }
     }
@@ -216,6 +222,7 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
         minScore.text = (_readField(q, 'min') ?? '').toString();
         _courseId = _readField(q, 'course')?.toString();
         _readField(q, 'owner');
+        _quizStatus = (q['status'] ?? 'draft').toString();
       }
     } catch (e) {
       debugPrint('[TeacherQuizForm] Gagal memuat data: $e');
@@ -233,7 +240,9 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
     final min = int.tryParse(minScore.text.trim());
 
     if (_courseId == null) {
-      return _snack('Course tidak diketahui. Buka halaman ini dari detail course.');
+      return _snack(
+        'Course tidak diketahui. Buka halaman ini dari detail course.',
+      );
     }
     if (quizTitle.isEmpty) return _snack('Judul quiz wajib diisi.');
     if (dur == null || dur <= 0) {
@@ -255,8 +264,10 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
         min: min,
         uid: uid,
       );
-      debugPrint('[TeacherQuizForm] kolom dipakai: '
-          '${_candidates.keys.map((f) => '$f=${_col(f)}').join(', ')}');
+      debugPrint(
+        '[TeacherQuizForm] kolom dipakai: '
+        '${_candidates.keys.map((f) => '$f=${_col(f)}').join(', ')}',
+      );
 
       if (created != null) {
         debugPrint('[TeacherQuizForm] kolom $_table: ${created.keys.toList()}');
@@ -284,6 +295,7 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
         'quiz_id': _quizId,
         'quiz_title': quizTitle,
         'course_id': _courseId,
+        'status': _quizStatus,
       },
     );
     if (!mounted) return;
@@ -299,78 +311,73 @@ class _TeacherQuizFormPageState extends State<TeacherQuizFormPage> {
 
   @override
   Widget build(BuildContext context) => EduScaffold(
-        body: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const BackLink(),
-            const SizedBox(height: 4),
-            Text(
-              _quizId == null ? 'Tambah Informasi Quiz' : 'Edit Informasi Quiz',
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 10),
-            if (_loading)
-              const Padding(
-                padding: EdgeInsets.only(top: 40),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (_loadError != null)
-              Center(
-                child: Column(
-                  children: [
-                    Text(_loadError!, textAlign: TextAlign.center),
-                    const SizedBox(height: 8),
-                    TextButton(
-                        onPressed: _load, child: const Text('Coba lagi')),
-                  ],
-                ),
-              )
-            else
-              _form(),
-          ],
+    body: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const BackLink(),
+        const SizedBox(height: 4),
+        Text(
+          _quizId == null ? 'Tambah Informasi Quiz' : 'Edit Informasi Quiz',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
-      );
+        const SizedBox(height: 10),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (_loadError != null)
+          Center(
+            child: Column(
+              children: [
+                Text(_loadError!, textAlign: TextAlign.center),
+                const SizedBox(height: 8),
+                TextButton(onPressed: _load, child: const Text('Coba lagi')),
+              ],
+            ),
+          )
+        else
+          _form(),
+      ],
+    ),
+  );
 
   Widget _form() => FormCard(
+    children: [
+      const FieldLabel('Judul Quiz', required: true),
+      EduField(controller: title),
+      Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const FieldLabel('Judul Quiz', required: true),
-          EduField(controller: title),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('Durasi (menit)', required: true),
-                    EduField(
-                      controller: duration,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const FieldLabel('Durasi (menit)', required: true),
+                EduField(
+                  controller: duration,
+                  keyboardType: TextInputType.number,
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const FieldLabel('Nilai Minimal', required: true),
-                    EduField(
-                      controller: minScore,
-                      keyboardType: TextInputType.number,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
-          SolidBtn(
-            label: 'Selanjutnya',
-            onTap: _saving ? null : _next,
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const FieldLabel('Nilai Minimal', required: true),
+                EduField(
+                  controller: minScore,
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
           ),
         ],
-      );
+      ),
+      const SizedBox(height: 16),
+      SolidBtn(label: 'Selanjutnya', onTap: _saving ? null : _next),
+    ],
+  );
 }

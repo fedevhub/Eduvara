@@ -11,12 +11,10 @@ class TeacherDashboardPage extends StatefulWidget {
 }
 
 class _CourseItem {
-  final String id;
   final String title;
   final int studentCount;
   final double completion; // 0..1
   const _CourseItem({
-    required this.id,
     required this.title,
     required this.studentCount,
     required this.completion,
@@ -62,12 +60,12 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
           .maybeSingle();
 
       // 2. Kursus milik guru
-     final courseRows = await _db
-    .from('courses')
-    .select('id, title, status')
-    .eq('teacher_id', user.id);
+      final courseRows = await _db
+          .from('courses')
+          .select('id, title, status')
+          .eq('teacher_id', user.id);
       final courses = List<Map<String, dynamic>>.from(courseRows);
-      final courseIds = courses.map((c) => c['id']).toList();
+      final courseIds = courses.map((c) => c['id'].toString()).toList();
 
       // 3. Siswa per kursus
       final studentsByCourse = <String, Set<String>>{};
@@ -85,80 +83,101 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         }
       }
 
-      // 4. Progress (opsional: kolom enrollments.progress, 0-100)
-      final progressByCourse = <String, List<double>>{};
+      // 4. Progress dihitung dari materi yang ditandai selesai siswa.
+      final materialCountByCourse = <String, int>{};
+      final courseByMaterial = <String, String>{};
       if (courseIds.isNotEmpty) {
-        try {
-          final rows = await _db
-              .from('enrollments')
-              .select('course_id, progress')
-              .inFilter('course_id', courseIds);
-          for (final r in List<Map<String, dynamic>>.from(rows)) {
-            final p = (r['progress'] as num?)?.toDouble();
-            if (p == null) continue;
-            progressByCourse
-                .putIfAbsent(r['course_id'].toString(), () => [])
-                .add(p / 100);
-          }
-        } catch (_) {
-          // kolom/tabel belum ada -> dianggap belum ada data
+        final materialRows = await _db
+            .from('materials')
+            .select('id, course_id')
+            .inFilter('course_id', courseIds);
+        for (final material in materialRows) {
+          final courseId = material['course_id'].toString();
+          materialCountByCourse[courseId] =
+              (materialCountByCourse[courseId] ?? 0) + 1;
+          courseByMaterial[material['id'].toString()] = courseId;
         }
       }
 
-      // 5. Nilai kuis (opsional: tabel quiz_results, kolom course_id & score)
+      final completedByCourse = <String, int>{};
+      if (courseByMaterial.isNotEmpty) {
+        final progressRows = await _db
+            .from('material_progress')
+            .select('material_id')
+            .eq('completed', true)
+            .inFilter('material_id', courseByMaterial.keys.toList());
+        for (final progress in progressRows) {
+          final courseId = courseByMaterial[progress['material_id'].toString()];
+          if (courseId != null) {
+            completedByCourse[courseId] =
+                (completedByCourse[courseId] ?? 0) + 1;
+          }
+        }
+      }
+
+      final completionByCourse = <String, double>{};
+      for (final course in courses) {
+        final id = course['id'].toString();
+        final studentCount = studentsByCourse[id]?.length ?? 0;
+        final denominator = (materialCountByCourse[id] ?? 0) * studentCount;
+        if (denominator > 0) {
+          completionByCourse[id] = (completedByCourse[id] ?? 0) / denominator;
+        }
+      }
+
+      // 5. Nilai diambil dari percobaan quiz yang disimpan siswa.
       double? avgQuiz;
       if (courseIds.isNotEmpty) {
-        try {
-          final rows = await _db
-              .from('quiz_results')
+        final quizzes = await _db
+            .from('quizzes')
+            .select('id')
+            .inFilter('course_id', courseIds);
+        final quizIds = quizzes.map((quiz) => quiz['id'].toString()).toList();
+        if (quizIds.isNotEmpty) {
+          final attempts = await _db
+              .from('quiz_attempts')
               .select('score')
-              .inFilter('course_id', courseIds);
-          final scores = List<Map<String, dynamic>>.from(rows)
-              .map((r) => (r['score'] as num?)?.toDouble())
+              .inFilter('quiz_id', quizIds)
+              .eq('completed', true);
+          final scores = List<Map<String, dynamic>>.from(attempts)
+              .map((attempt) => (attempt['score'] as num?)?.toDouble())
               .whereType<double>()
               .toList();
           if (scores.isNotEmpty) {
             avgQuiz = scores.reduce((a, b) => a + b) / scores.length;
           }
-        } catch (_) {}
+        }
       }
 
-      // 6. Notifikasi belum dibaca (opsional: tabel notifications)
-      bool unread = false;
-      try {
-        final rows = await _db
-            .from('notifications')
-            .select('id')
-            .eq('user_id', user.id)
-            .eq('is_read', false)
-            .limit(1);
-        unread = List.from(rows).isNotEmpty;
-      } catch (_) {}
+      // 6. Notifikasi pribadi dan pengumuman umum.
+      final notificationRows = await _db
+          .from('notifications')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('is_read', false)
+          .limit(1);
+      final unread = notificationRows.isNotEmpty;
 
-      double avgOf(List<double> v) =>
-          v.isEmpty ? 0 : v.reduce((a, b) => a + b) / v.length;
+      final active = courses.where((c) => c['status'] == 'active').map((c) {
+        final id = c['id'].toString();
+        return _CourseItem(
+          title: (c['title'] ?? '-').toString(),
+          studentCount: studentsByCourse[id]?.length ?? 0,
+          completion: completionByCourse[id] ?? 0,
+        );
+      }).toList();
 
-      final active = courses
-          .where((c) => c['status'] == 'active')
-          .map((c) {
-            final id = c['id'].toString();
-            return _CourseItem(
-              id: id,
-              title: (c['title'] ?? '-').toString(),
-              studentCount: studentsByCourse[id]?.length ?? 0,
-              completion: avgOf(progressByCourse[id] ?? const []),
-            );
-          })
-          .toList();
-
-      final allProgress = progressByCourse.values.expand((e) => e).toList();
+      final allProgress = completionByCourse.values.toList();
+      final avgCompletion = allProgress.isEmpty
+          ? null
+          : allProgress.reduce((a, b) => a + b) / allProgress.length;
 
       if (!mounted) return;
       setState(() {
         _teacherName = (profile?['full_name'] ?? '-').toString();
         _totalCourses = courses.length;
         _totalStudents = allStudents.length;
-        _avgCompletion = allProgress.isEmpty ? null : avgOf(allProgress);
+        _avgCompletion = avgCompletion;
         _avgQuizScore = avgQuiz;
         _hasUnread = unread;
         _activeCourses = active;
@@ -217,10 +236,6 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
                 info:
                     '${c.studentCount} siswa • ${(c.completion * 100).round()}% selesai',
                 value: c.completion,
-                onTap: () => _go(
-                  RouteNames.teacherCourseDetail,
-                  arguments: c.id, // id kursus dikirim ke halaman detail
-                ),
               ),
               const SizedBox(height: 10),
             ],
@@ -238,10 +253,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
             const Text('Panel Teacher', style: TextStyle(fontSize: 11)),
             Text(
               _teacherName,
-              style: const TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-              ),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
             ),
           ],
         ),
@@ -347,17 +359,14 @@ class _ActiveCourse extends StatelessWidget {
   final String title;
   final String info;
   final double value;
-  final VoidCallback onTap;
   const _ActiveCourse({
     required this.title,
     required this.info,
     required this.value,
-    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) => EduCard(
-    onTap: onTap,
     padding: const EdgeInsets.all(12),
     child: Column(
       children: [
@@ -378,7 +387,6 @@ class _ActiveCourse extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 18),
           ],
         ),
         const SizedBox(height: 8),
