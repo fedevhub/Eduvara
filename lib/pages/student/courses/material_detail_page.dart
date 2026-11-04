@@ -55,11 +55,15 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-      final material = await _db
-          .from('materials')
-          .select()
-          .eq('id', _materialId!)
-          .single();
+      Map<String, dynamic> material;
+      try {
+        material = Map<String, dynamic>.from(
+          await _db.from('materials').select().eq('id', _materialId!).single(),
+        );
+      } on PostgrestException catch (e) {
+        if (e.code != 'PGRST205') rethrow;
+        throw 'Materi belum tersedia pada database.';
+      }
 
       final progress = await _db
           .from('material_progress')
@@ -70,7 +74,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
 
       if (!mounted) return;
       setState(() {
-        _material = Map<String, dynamic>.from(material);
+        _material = material;
         _materialTitle = _material!['title']?.toString() ?? _materialTitle;
         _completed = progress?['completed'] == true;
         _loading = false;
@@ -160,7 +164,9 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
     final widgets = <Widget>[];
     for (var i = 0; i < parts.length; i++) {
       if (i > 0) widgets.add(const SizedBox(height: 10));
-      widgets.add(Text(parts[i], style: const TextStyle(fontSize: 9, height: 1.5)));
+      widgets.add(
+        Text(parts[i], style: const TextStyle(fontSize: 9, height: 1.5)),
+      );
     }
     return widgets;
   }
@@ -241,7 +247,9 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        ..._summaryParagraphs(_material!['summary']?.toString()),
+                        ..._summaryParagraphs(
+                          _material!['summary']?.toString(),
+                        ),
                       ],
                     ),
                   ),

@@ -9,6 +9,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:eduvara/app.dart';
+import 'package:eduvara/core/routes/route_names.dart';
 
 void main() {
   testWidgets('Eduvara starts on the splash screen', (
@@ -18,5 +19,11 @@ void main() {
     await tester.pumpWidget(const EduvaraApp());
 
     expect(find.byType(Image), findsOneWidget);
+  });
+
+  test('student role resolves to the student dashboard route', () {
+    expect(RouteNames.dashboardForRole('student'), RouteNames.studentDashboard);
+    expect(RouteNames.dashboardForRole('Student'), RouteNames.studentDashboard);
+    expect(RouteNames.dashboardForRole('STUDENT'), RouteNames.studentDashboard);
   });
 }

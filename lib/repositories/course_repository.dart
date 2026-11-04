@@ -37,13 +37,21 @@ class CourseRepository {
         .toList();
     final teacherNames = <String, String>{};
     if (teacherIds.isNotEmpty) {
-      final teacherRows = await _db
-          .from('profiles')
-          .select('id, full_name')
-          .inFilter('id', teacherIds);
-      for (final row in List<Map<String, dynamic>>.from(teacherRows)) {
-        teacherNames[row['id'].toString()] = (row['full_name'] ?? '')
-            .toString();
+      try {
+        final teacherRows = await _db
+            .from('profiles')
+            .select('id, full_name')
+            .inFilter('id', teacherIds);
+        for (final row in List<Map<String, dynamic>>.from(teacherRows)) {
+          teacherNames[row['id'].toString()] = (row['full_name'] ?? '')
+              .toString();
+        }
+      } on PostgrestException catch (e) {
+        final message = e.message.toLowerCase();
+        if (e.code != 'PGRST205' &&
+            !message.contains('could not find the table')) {
+          rethrow;
+        }
       }
     }
 

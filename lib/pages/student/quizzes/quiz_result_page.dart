@@ -49,35 +49,55 @@ class _QuizResultPageState extends State<QuizResultPage> {
     if (_attemptId != null) _result = _load();
   }
 
+  bool _isMissingTableError(PostgrestException e) =>
+      e.code == 'PGRST205' ||
+      e.message.toLowerCase().contains('could not find the table');
+
   Future<_ResultData> _load() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-    final row = await _db
-        .from('quiz_attempts')
-        .select('score, correct_count, wrong_count, quizzes(course_id, passing_score)')
-        .eq('id', _attemptId!)
-        .eq('user_id', uid)
-        .single();
+    try {
+      final row = await _db
+          .from('quiz_attempts')
+          .select(
+            'score, correct_count, wrong_count, quizzes(course_id, passing_score)',
+          )
+          .eq('id', _attemptId!)
+          .eq('user_id', uid)
+          .single();
 
-    final quiz = row['quizzes'] as Map?;
-    return _ResultData(
-      (row['score'] as num?)?.round() ?? 0,
-      (row['correct_count'] as num?)?.toInt() ?? 0,
-      (row['wrong_count'] as num?)?.toInt() ?? 0,
-      (quiz?['passing_score'] as num?)?.toInt() ?? 80,
-      quiz?['course_id'],
-    );
+      final quiz = row['quizzes'] as Map?;
+      return _ResultData(
+        (row['score'] as num?)?.round() ?? 0,
+        (row['correct_count'] as num?)?.toInt() ?? 0,
+        (row['wrong_count'] as num?)?.toInt() ?? 0,
+        (quiz?['passing_score'] as num?)?.toInt() ?? 80,
+        quiz?['course_id'],
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) rethrow;
+      return const _ResultData(0, 0, 0, 80, null);
+    }
   }
 
-  void _reload() => setState(() => _result = _load());
+  void _reload() {
+    final next = _load();
+    if (!mounted) return;
+    setState(() {
+      _result = next;
+    });
+  }
 
   Widget _row(String k, String v) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 4),
     child: Row(
       children: [
         Expanded(child: Text(k, style: const TextStyle(fontSize: 9))),
-        Text(v, style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700)),
+        Text(
+          v,
+          style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w700),
+        ),
       ],
     ),
   );
@@ -88,12 +108,21 @@ class _QuizResultPageState extends State<QuizResultPage> {
       Container(
         width: double.infinity,
         color: Ui.blue,
-        padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 36, 20, 28),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          MediaQuery.of(context).padding.top + 36,
+          20,
+          28,
+        ),
         child: Column(
           children: [
             Text(
               d.passed ? 'Anda Lulus' : 'Anda Belum Lulus',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+              ),
             ),
             const SizedBox(height: 14),
             Container(
@@ -108,9 +137,16 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 children: [
                   Text(
                     '${d.score}',
-                    style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: Colors.white),
+                    style: const TextStyle(
+                      fontSize: 34,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
-                  const Text('Dari 100 Poin', style: TextStyle(fontSize: 7, color: Colors.white)),
+                  const Text(
+                    'Dari 100 Poin',
+                    style: TextStyle(fontSize: 7, color: Colors.white),
+                  ),
                 ],
               ),
             ),
@@ -126,7 +162,10 @@ class _QuizResultPageState extends State<QuizResultPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Rincian Hasil', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                  const Text(
+                    'Rincian Hasil',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
                   const SizedBox(height: 6),
                   _row('Jumlah Benar', '${d.correct} Soal'),
                   _row('Jawaban Salah', '${d.wrong} Soal'),
@@ -139,7 +178,8 @@ class _QuizResultPageState extends State<QuizResultPage> {
               onTap: () => Navigator.pushNamedAndRemoveUntil(
                 context,
                 RouteNames.studentCourseDetail,
-                (r) => r.settings.name == RouteNames.studentDashboard || r.isFirst,
+                (r) =>
+                    r.settings.name == RouteNames.studentDashboard || r.isFirst,
                 arguments: {'course_id': d.courseId},
               ),
               child: Container(
@@ -152,7 +192,11 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 ),
                 child: const Text(
                   'Kembali ke Course',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Ui.blue),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: Ui.blue,
+                  ),
                 ),
               ),
             ),
@@ -198,7 +242,10 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snapshot.hasError || snapshot.data == null) {
-                return _error('Hasil kuis belum dapat dimuat.', onRetry: _reload);
+                return _error(
+                  'Hasil kuis belum dapat dimuat.',
+                  onRetry: _reload,
+                );
               }
               return _content(snapshot.data!);
             },

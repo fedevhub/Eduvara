@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,33 +15,34 @@ class SplashPage extends StatefulWidget {
 }
 
 class _SplashPageState extends State<SplashPage> {
+  Timer? _timer;
+
   @override
   void initState() {
     super.initState();
-    _checkSession();
+    _timer = Timer(const Duration(milliseconds: 1400), () async {
+      if (!mounted) return;
+
+      final auth = context.read<AuthProvider>();
+      await auth.restoreSession();
+
+      if (!mounted) return;
+
+      final user = auth.user;
+      final destination = user == null
+          ? RouteNames.login
+          : (RouteNames.isStudentRole(user.role)
+                ? RouteNames.studentDashboard
+                : RouteNames.dashboardForRole(user.role));
+
+      Navigator.pushReplacementNamed(context, destination);
+    });
   }
 
-  Future<void> _checkSession() async {
-    // Tampilkan splash screen minimal 1,4 detik.
-    await Future.delayed(const Duration(milliseconds: 1400));
-
-    if (!mounted) return;
-
-    final auth = context.read<AuthProvider>();
-
-    // Periksa sesi login yang tersimpan di Supabase.
-    await auth.restoreSession();
-
-    if (!mounted) return;
-
-    final user = auth.user;
-
-    // Arahkan pengguna berdasarkan status login dan role.
-    final destination = user == null
-        ? RouteNames.login
-        : RouteNames.dashboardForRole(user.role);
-
-    Navigator.pushReplacementNamed(context, destination);
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
   }
 
   @override

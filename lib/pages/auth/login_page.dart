@@ -46,12 +46,11 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     final role = auth.user!.role;
+    final destination = RouteNames.isStudentRole(role)
+        ? RouteNames.studentDashboard
+        : RouteNames.dashboardForRole(role);
 
-    Navigator.pushNamedAndRemoveUntil(
-      context,
-      RouteNames.dashboardForRole(role),
-      (route) => false,
-    );
+    Navigator.pushNamedAndRemoveUntil(context, destination, (route) => false);
   }
 
   Widget _fieldBox({

@@ -12,11 +12,13 @@ class AuthUserModel {
   });
 
   factory AuthUserModel.fromMap(Map<String, dynamic> map, String email) {
+    final rawRole = (map['role'] ?? '').toString();
+
     return AuthUserModel(
       id: map['id'].toString(),
       email: email,
       name: map['full_name'] as String,
-      role: map['role'] as String,
+      role: rawRole.trim().toLowerCase(),
     );
   }
 }

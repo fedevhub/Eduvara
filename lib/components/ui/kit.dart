@@ -337,7 +337,10 @@ class SearchBox extends StatelessWidget {
               isCollapsed: true,
               border: InputBorder.none,
               hintText: hint,
-              hintStyle: const TextStyle(fontSize: 12, color: Color(0xFFB6BFCC)),
+              hintStyle: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFFB6BFCC),
+              ),
             ),
           ),
         ),
@@ -583,14 +586,14 @@ class LockedCard extends StatelessWidget {
 
 class EduFooter extends StatelessWidget {
   final String text;
-  const EduFooter({super.key, this.text = 'Eduvara Admin v1.0.0 • SMK Negeri 8 Malang'});
+  const EduFooter({
+    super.key,
+    this.text = 'Eduvara Admin v1.0.0 • SMK Negeri 8 Malang',
+  });
 
   @override
   Widget build(BuildContext context) => Center(
-    child: Text(
-      text,
-      style: const TextStyle(fontSize: 9, color: Ui.muted),
-    ),
+    child: Text(text, style: const TextStyle(fontSize: 9, color: Ui.muted)),
   );
 }
 
@@ -741,7 +744,10 @@ class FieldLabel extends StatelessWidget {
         ),
         children: [
           if (required)
-            const TextSpan(text: ' *', style: TextStyle(color: Ui.red)),
+            const TextSpan(
+              text: ' *',
+              style: TextStyle(color: Ui.red),
+            ),
         ],
       ),
     ),
@@ -902,12 +908,38 @@ class EduBottomNav extends StatelessWidget {
   final int current;
   const EduBottomNav({super.key, required this.role, required this.current});
 
-  List<_NavItem> get _items => const [
-    _NavItem(Icons.home_outlined, 'Home', '/admin/dashboard'),
-    _NavItem(Icons.people_outline, 'Pengguna', '/admin/users'),
-    _NavItem(Icons.menu_book_outlined, 'Course', '/admin/courses'),
-    _NavItem(Icons.settings_outlined, 'Setting', '/admin/profile'),
-  ];
+  List<_NavItem> get _items {
+    final normalizedRole = (role).trim().toLowerCase();
+
+    switch (normalizedRole) {
+      case 'student':
+      case 'siswa':
+        return const [
+          _NavItem(Icons.home_outlined, 'Home', '/student/dashboard'),
+          _NavItem(Icons.menu_book_outlined, 'Course', '/student/courses'),
+          _NavItem(Icons.history, 'History', '/student/history'),
+          _NavItem(Icons.notifications_none, 'Notif', '/student/notifications'),
+          _NavItem(Icons.person_outline, 'Profile', '/student/profile'),
+        ];
+      case 'teacher':
+      case 'guru':
+        return const [
+          _NavItem(Icons.home_outlined, 'Home', '/teacher/dashboard'),
+          _NavItem(Icons.menu_book_outlined, 'Course', '/teacher/courses'),
+          _NavItem(Icons.groups_outlined, 'Siswa', '/teacher/students'),
+          _NavItem(Icons.notifications_none, 'Notif', '/teacher/notifications'),
+          _NavItem(Icons.person_outline, 'Profile', '/teacher/profile'),
+        ];
+      case 'admin':
+      default:
+        return const [
+          _NavItem(Icons.home_outlined, 'Home', '/admin/dashboard'),
+          _NavItem(Icons.people_outline, 'Pengguna', '/admin/users'),
+          _NavItem(Icons.menu_book_outlined, 'Course', '/admin/courses'),
+          _NavItem(Icons.settings_outlined, 'Setting', '/admin/profile'),
+        ];
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
