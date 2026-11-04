@@ -21,15 +21,24 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     _profile = _load();
   }
 
+  bool _isMissingTableError(PostgrestException e) =>
+      e.code == 'PGRST205' ||
+      e.message.toLowerCase().contains('could not find the table');
+
   Future<Map<String, dynamic>> _load() async {
     final user = _db.auth.currentUser;
     if (user == null) throw 'Sesi login berakhir, silakan login ulang';
 
-    final data = await _db
-        .from('profiles')
-        .select('full_name, role, status, class_name, created_at')
-        .eq('id', user.id)
-        .maybeSingle();
+    Map<String, dynamic>? data;
+    try {
+      data = await _db
+          .from('profiles')
+          .select('full_name, role, status, class_name, created_at')
+          .eq('id', user.id)
+          .maybeSingle();
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) rethrow;
+    }
 
     return {
       'full_name': data?['full_name'] ?? user.userMetadata?['full_name'] ?? '-',
@@ -41,7 +50,13 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     };
   }
 
-  void _reload() => setState(() => _profile = _load());
+  void _reload() {
+    final next = _load();
+    if (!mounted) return;
+    setState(() {
+      _profile = next;
+    });
+  }
 
   String _role(dynamic raw) {
     final v = raw?.toString().toLowerCase();
@@ -64,8 +79,18 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     final d = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
     if (d == null) return '-';
     const bulan = [
-      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
-      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+      'Januari',
+      'Februari',
+      'Maret',
+      'April',
+      'Mei',
+      'Juni',
+      'Juli',
+      'Agustus',
+      'September',
+      'Oktober',
+      'November',
+      'Desember',
     ];
     return '${d.day} ${bulan[d.month - 1]} ${d.year}';
   }
@@ -80,18 +105,27 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     try {
       await _db.auth.signOut();
       if (!mounted) return;
-      Navigator.pushNamedAndRemoveUntil(context, RouteNames.login, (r) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.login,
+        (r) => false,
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal keluar: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal keluar: $e')));
     }
   }
 
   Widget _header(String name, String email) => Container(
     width: double.infinity,
-    padding: EdgeInsets.fromLTRB(20, MediaQuery.of(context).padding.top + 24, 20, 22),
+    padding: EdgeInsets.fromLTRB(
+      20,
+      MediaQuery.of(context).padding.top + 24,
+      20,
+      22,
+    ),
     decoration: const BoxDecoration(
       gradient: Ui.gradientTop,
       borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
@@ -101,7 +135,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         Container(
           width: 64,
           height: 64,
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+          ),
           child: Center(
             child: Text(
               name == '-' ? '?' : Formatters.initials(name),
@@ -116,12 +153,13 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         const SizedBox(height: 8),
         Text(
           name,
-          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
         ),
-        Text(
-          email,
-          style: const TextStyle(fontSize: 10, color: Colors.white),
-        ),
+        Text(email, style: const TextStyle(fontSize: 10, color: Colors.white)),
       ],
     ),
   );
@@ -158,7 +196,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                     'Profil belum dapat dimuat.',
                     style: TextStyle(fontSize: 11, color: Ui.muted),
                   ),
-                  TextButton(onPressed: _reload, child: const Text('Coba lagi')),
+                  TextButton(
+                    onPressed: _reload,
+                    child: const Text('Coba lagi'),
+                  ),
                   const SizedBox(height: 8),
                   _logoutButton(),
                 ],
@@ -177,13 +218,20 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                 child: Column(
                   children: [
                     EduCard(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 6,
+                      ),
                       child: Column(
                         children: [
                           _Row('Role', _role(p['role'])),
                           _Row('Status', _status(p['status'])),
                           _Row('Kelas', p['class_name']?.toString() ?? '-'),
-                          _Row('Bergabung', _joined(p['created_at']), last: true),
+                          _Row(
+                            'Bergabung',
+                            _joined(p['created_at']),
+                            last: true,
+                          ),
                         ],
                       ),
                     ),
@@ -210,11 +258,18 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 10),
     decoration: BoxDecoration(
-      border: last ? null : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
+      border: last
+          ? null
+          : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
     ),
     child: Row(
       children: [
-        Expanded(child: Text(k, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600))),
+        Expanded(
+          child: Text(
+            k,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+          ),
+        ),
         Text(v, style: const TextStyle(fontSize: 10, color: Ui.muted)),
       ],
     ),

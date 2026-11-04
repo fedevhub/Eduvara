@@ -47,23 +47,39 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     _data = _load();
   }
 
-  void _reload() => setState(() => _data = _load());
+  void _reload() {
+    final next = _load();
+    if (!mounted) return;
+    setState(() {
+      _data = next;
+    });
+  }
+
+  bool _isMissingTableError(PostgrestException e) =>
+      e.code == 'PGRST205' ||
+      e.message.toLowerCase().contains('could not find the table');
 
   Future<_DashData> _load() async {
     final user = _db.auth.currentUser;
     if (user == null) throw 'Sesi login berakhir, silakan login ulang';
 
     // nama siswa
-    final profile = await _db
-        .from('profiles')
-        .select('full_name')
-        .eq('id', user.id)
-        .maybeSingle();
-    final name = (profile?['full_name'] ??
-            user.userMetadata?['full_name'] ??
-            user.email ??
-            '-')
-        .toString();
+    Map<String, dynamic>? profile;
+    try {
+      profile = await _db
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) rethrow;
+    }
+    final name =
+        (profile?['full_name'] ??
+                user.userMetadata?['full_name'] ??
+                user.email ??
+                '-')
+            .toString();
 
     final courses = await _repository.getCourses();
     if (courses.isEmpty) return _DashData(name, const []);
@@ -71,10 +87,17 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     final courseIds = courses.map((c) => c.id.toString()).toList();
 
     // total materi per course
-    final materials = await _db
-        .from('materials')
-        .select('id, course_id')
-        .inFilter('course_id', courseIds);
+    List<Map<String, dynamic>> materials = const [];
+    try {
+      materials = List<Map<String, dynamic>>.from(
+        await _db
+            .from('materials')
+            .select('id, course_id')
+            .inFilter('course_id', courseIds),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST205') rethrow;
+    }
 
     final totalByCourse = <String, int>{};
     final courseByMaterial = <String, String>{};
@@ -109,9 +132,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
       final isDone = total > 0 && done >= total;
 
-      final st = !previousDone
-          ? _St.locked
-          : (isDone ? _St.done : _St.running);
+      final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
 
       infos.add(_CourseInfo(c, st, total, pct));
       previousDone = isDone;
@@ -162,7 +183,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
             children: [
               Text(
                 info.course.title,
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               Text(
                 '${info.course.teacher} • ${info.total} Materi',
@@ -208,7 +232,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
               children: [
                 Text(
                   info.course.title,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 Text(
                   '${info.course.teacher} • ${info.total} Materi',
@@ -249,7 +276,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                   const Text('Panel Student', style: TextStyle(fontSize: 11)),
                   Text(
                     d.name,
-                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
@@ -299,8 +329,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
               ),
             ),
             GestureDetector(
-              onTap: () =>
-                  Navigator.pushReplacementNamed(context, RouteNames.studentCourses),
+              onTap: () => Navigator.pushReplacementNamed(
+                context,
+                RouteNames.studentCourses,
+              ),
               child: const Text(
                 'Lihat Semua',
                 style: TextStyle(
@@ -334,7 +366,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
-            child: Padding(padding: EdgeInsets.all(40), child: CircularProgressIndicator()),
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: CircularProgressIndicator(),
+            ),
           );
         }
         if (snapshot.hasError || snapshot.data == null) {

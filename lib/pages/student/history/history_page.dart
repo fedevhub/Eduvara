@@ -19,21 +19,36 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
     _history = _load();
   }
 
+  bool _isMissingTableError(PostgrestException e) =>
+      e.code == 'PGRST205' ||
+      e.message.toLowerCase().contains('could not find the table');
+
   Future<List<Map<String, dynamic>>> _load() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-    final data = await _db
-        .from('quiz_attempts')
-        .select('id, score, created_at, quizzes(title, courses(title))')
-        .eq('user_id', uid)
-        .eq('completed', true)
-        .order('created_at', ascending: false);
+    try {
+      final data = await _db
+          .from('quiz_attempts')
+          .select('id, score, created_at, quizzes(title, courses(title))')
+          .eq('user_id', uid)
+          .eq('completed', true)
+          .order('created_at', ascending: false);
 
-    return List<Map<String, dynamic>>.from(data);
+      return List<Map<String, dynamic>>.from(data);
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) rethrow;
+      return const [];
+    }
   }
 
-  void _reload() => setState(() => _history = _load());
+  void _reload() {
+    final next = _load();
+    if (!mounted) return;
+    setState(() {
+      _history = next;
+    });
+  }
 
   String _two(int n) => n.toString().padLeft(2, '0');
 
@@ -71,10 +86,19 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(courseTitle, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text(
+                    courseTitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   Text(quizTitle, style: const TextStyle(fontSize: 8.5)),
                   const SizedBox(height: 4),
-                  Text(date == null ? '-' : _stamp(date), style: const TextStyle(fontSize: 8)),
+                  Text(
+                    date == null ? '-' : _stamp(date),
+                    style: const TextStyle(fontSize: 8),
+                  ),
                 ],
               ),
             ),
@@ -89,7 +113,11 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
               child: FittedBox(
                 child: Text(
                   score,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: Ui.greenDark),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    color: Ui.greenDark,
+                  ),
                 ),
               ),
             ),
@@ -122,21 +150,30 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 6),
-        const Text('History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text(
+          'History',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 6),
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _history,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
               );
             }
             if (snapshot.hasError) {
               return Column(
                 children: [
                   const Text('History belum dapat dimuat.'),
-                  TextButton(onPressed: _reload, child: const Text('Coba lagi')),
+                  TextButton(
+                    onPressed: _reload,
+                    child: const Text('Coba lagi'),
+                  ),
                 ],
               );
             }
@@ -144,7 +181,10 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
             if (rows.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Belum ada riwayat quiz.', style: TextStyle(fontSize: 10, color: Ui.muted)),
+                child: Text(
+                  'Belum ada riwayat quiz.',
+                  style: TextStyle(fontSize: 10, color: Ui.muted),
+                ),
               );
             }
             return Column(

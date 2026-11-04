@@ -25,6 +25,9 @@ import '../../pages/student/student_dashboard_page.dart';
 import '../../pages/student/courses/course_detail_page.dart';
 import '../../pages/student/courses/material_detail_page.dart';
 import '../../pages/student/courses/student_courses_page.dart';
+import '../../pages/student/history/history_page.dart';
+import '../../pages/student/notifications/notification_page.dart';
+import '../../pages/student/profile/student_profile_page.dart';
 import '../../pages/student/quizzes/question_page.dart';
 import '../../pages/student/quizzes/quiz_page.dart';
 import '../../pages/teacher/teacher_dashboard_page.dart';
@@ -70,6 +73,9 @@ class AppRouter {
     RouteNames.studentCourses => const StudentCoursesPage(),
     RouteNames.studentCourseDetail => const StudentCourseDetailPage(),
     RouteNames.studentMaterialDetail => const StudentMaterialDetailPage(),
+    RouteNames.studentHistory => const StudentHistoryPage(),
+    RouteNames.studentNotifications => const StudentNotificationPage(),
+    RouteNames.studentProfile => const StudentProfilePage(),
     RouteNames.studentQuiz => const QuizPage(),
     RouteNames.studentQuestion => const QuestionPage(),
 

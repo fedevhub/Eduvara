@@ -47,18 +47,34 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-      final results = await Future.wait([
+      final results = await Future.wait(<Future<dynamic>>[
         _db.from('courses').select().eq('id', _courseId!).single(),
-        _db
-            .from('materials')
-            .select()
-            .eq('course_id', _courseId!)
-            .order('order_no'),
-        _db
-            .from('quizzes')
-            .select()
-            .eq('course_id', _courseId!)
-            .order('order_no'),
+        () async {
+          try {
+            final rows = await _db
+                .from('materials')
+                .select()
+                .eq('course_id', _courseId!)
+                .order('order_no');
+            return List<Map<String, dynamic>>.from(rows as List);
+          } on PostgrestException catch (e) {
+            if (e.code != 'PGRST205') rethrow;
+            return <Map<String, dynamic>>[];
+          }
+        }(),
+        () async {
+          try {
+            final rows = await _db
+                .from('quizzes')
+                .select()
+                .eq('course_id', _courseId!)
+                .order('order_no');
+            return List<Map<String, dynamic>>.from(rows as List);
+          } on PostgrestException catch (e) {
+            if (e.code != 'PGRST205') rethrow;
+            return <Map<String, dynamic>>[];
+          }
+        }(),
       ]);
 
       final materials = List<Map<String, dynamic>>.from(results[1] as List);
@@ -67,31 +83,41 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
       final matIds = materials.map((e) => e['id']).toList();
       final quizIds = quizzes.map((e) => e['id']).toList();
 
-      final doneMat = matIds.isEmpty
-          ? []
-          : await _db
-                .from('material_progress')
-                .select('material_id')
-                .eq('user_id', uid)
-                .eq('completed', true)
-                .inFilter('material_id', matIds);
-      final doneQuiz = quizIds.isEmpty
-          ? []
-          : await _db
-                .from('quiz_attempts')
-                .select('quiz_id')
-                .eq('user_id', uid)
-                .eq('completed', true)
-                .inFilter('quiz_id', quizIds);
+      List<dynamic> doneMat = const [];
+      List<dynamic> doneQuiz = const [];
+
+      if (matIds.isNotEmpty) {
+        try {
+          doneMat = await _db
+              .from('material_progress')
+              .select('material_id')
+              .eq('user_id', uid)
+              .eq('completed', true)
+              .inFilter('material_id', matIds);
+        } on PostgrestException catch (e) {
+          if (e.code != 'PGRST205') rethrow;
+        }
+      }
+
+      if (quizIds.isNotEmpty) {
+        try {
+          doneQuiz = await _db
+              .from('quiz_attempts')
+              .select('quiz_id')
+              .eq('user_id', uid)
+              .eq('completed', true)
+              .inFilter('quiz_id', quizIds);
+        } on PostgrestException catch (e) {
+          if (e.code != 'PGRST205') rethrow;
+        }
+      }
 
       if (!mounted) return;
       setState(() {
         _course = Map<String, dynamic>.from(results[0] as Map);
         _materials = materials;
         _quizzes = quizzes;
-        _doneMaterials = {
-          for (final r in doneMat) r['material_id'].toString(),
-        };
+        _doneMaterials = {for (final r in doneMat) r['material_id'].toString()};
         _doneQuizzes = {for (final r in doneQuiz) r['quiz_id'].toString()};
         _loading = false;
       });
@@ -307,10 +333,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
               ),
               const SizedBox(width: 10),
               Expanded(
-                child: StatBox(
-                  value: '$doneMat/$totalMat',
-                  label: 'Berjalan',
-                ),
+                child: StatBox(value: '$doneMat/$totalMat', label: 'Berjalan'),
               ),
               const SizedBox(width: 10),
               Expanded(

@@ -35,21 +35,42 @@ class RouteNames {
   static const studentCourses = '/student/courses';
   static const studentCourseDetail = '/student/courses/detail';
   static const studentMaterialDetail = '/student/materials/detail';
+  static const studentHistory = '/student/history';
+  static const studentNotifications = '/student/notifications';
+  static const studentProfile = '/student/profile';
   static const studentQuiz = '/student/quiz';
   static const studentQuestion = '/student/quiz/question';
   static const studentQuizResult = '/student/quiz/result';
 
+  static String normalizeRole(String? role) =>
+      (role ?? '').trim().toLowerCase();
+
+  static bool isStudentRole(String? role) {
+    final normalized = normalizeRole(role);
+    return normalized == 'student' || normalized == 'siswa';
+  }
+
+  static bool isTeacherRole(String? role) {
+    final normalized = normalizeRole(role);
+    return normalized == 'teacher' || normalized == 'guru';
+  }
+
   // Redirect berdasarkan role pengguna
   static String dashboardForRole(String role) {
-    switch (role) {
-      case 'admin':
-        return adminDashboard;
-      case 'teacher':
-        return teacherDashboard;
-      case 'student':
-        return studentDashboard;
-      default:
-        throw Exception('Role tidak dikenali: $role');
+    final normalized = normalizeRole(role);
+
+    if (isStudentRole(normalized)) {
+      return studentDashboard;
     }
+
+    if (isTeacherRole(normalized)) {
+      return teacherDashboard;
+    }
+
+    if (normalized == 'admin') {
+      return adminDashboard;
+    }
+
+    throw Exception('Role tidak dikenali: $role');
   }
 }

@@ -20,20 +20,35 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
     _items = _load();
   }
 
+  bool _isMissingTableError(PostgrestException e) =>
+      e.code == 'PGRST205' ||
+      e.message.toLowerCase().contains('could not find the table');
+
   Future<List<Map<String, dynamic>>> _load() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-    final data = await _db
-        .from('notifications')
-        .select('id, title, message, created_at')
-        .or('user_id.eq.$uid,user_id.is.null')
-        .order('created_at', ascending: false);
+    try {
+      final data = await _db
+          .from('notifications')
+          .select('id, title, message, created_at')
+          .or('user_id.eq.$uid,user_id.is.null')
+          .order('created_at', ascending: false);
 
-    return List<Map<String, dynamic>>.from(data);
+      return List<Map<String, dynamic>>.from(data);
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) rethrow;
+      return const [];
+    }
   }
 
-  void _reload() => setState(() => _items = _load());
+  void _reload() {
+    final next = _load();
+    if (!mounted) return;
+    setState(() {
+      _items = next;
+    });
+  }
 
   String _two(int n) => n.toString().padLeft(2, '0');
 
@@ -72,14 +87,23 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
               Expanded(
                 child: Text(
                   row['title']?.toString() ?? '-',
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
-              Text(_ago(date), style: const TextStyle(fontSize: 7.5, color: Ui.muted)),
+              Text(
+                _ago(date),
+                style: const TextStyle(fontSize: 7.5, color: Ui.muted),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(row['message']?.toString() ?? '', style: const TextStyle(fontSize: 8.5)),
+          Text(
+            row['message']?.toString() ?? '',
+            style: const TextStyle(fontSize: 8.5),
+          ),
         ],
       ),
     ),
@@ -108,21 +132,30 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 6),
-        const Text('Notification', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text(
+          'Notification',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 2),
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _items,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(
-                child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()),
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(),
+                ),
               );
             }
             if (snapshot.hasError) {
               return Column(
                 children: [
                   const Text('Notifikasi belum dapat dimuat.'),
-                  TextButton(onPressed: _reload, child: const Text('Coba lagi')),
+                  TextButton(
+                    onPressed: _reload,
+                    child: const Text('Coba lagi'),
+                  ),
                 ],
               );
             }
@@ -130,7 +163,10 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
             if (rows.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16),
-                child: Text('Belum ada notifikasi.', style: TextStyle(fontSize: 10, color: Ui.muted)),
+                child: Text(
+                  'Belum ada notifikasi.',
+                  style: TextStyle(fontSize: 10, color: Ui.muted),
+                ),
               );
             }
             return Column(
