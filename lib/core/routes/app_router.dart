@@ -30,16 +30,16 @@ import '../../pages/student/notifications/notification_page.dart';
 import '../../pages/student/profile/student_profile_page.dart';
 import '../../pages/student/quizzes/question_page.dart';
 import '../../pages/student/quizzes/quiz_page.dart';
-import '../../pages/student/history/history_page.dart';
-import '../../pages/student/notifications/notification_page.dart';
-import '../../pages/student/profile/student_profile_page.dart';
+import '../../pages/student/quizzes/quiz_result_page.dart';
 import '../../pages/teacher/courses/course_detail_page.dart';
 import '../../pages/teacher/courses/teacher_course_page.dart';
 import '../../pages/teacher/history/history_page.dart';
 import '../../pages/teacher/materials/material_form_page.dart';
+import '../../pages/teacher/notifications/notification_page.dart';
 import '../../pages/teacher/profile/teacher_profile_page.dart';
 import '../../pages/teacher/quizzez/question_form_page.dart';
 import '../../pages/teacher/quizzez/quiz_form_page.dart';
+import '../../pages/teacher/students/student_detail_page.dart';
 import '../../pages/teacher/students/student_list_page.dart';
 import '../../pages/teacher/teacher_dashboard_page.dart';
 
@@ -84,7 +84,9 @@ class AppRouter {
     RouteNames.teacherQuizForm => const TeacherQuizFormPage(),
     RouteNames.teacherQuestionForm => const TeacherQuestionFormPage(),
     RouteNames.teacherStudents => const TeacherStudentListPage(),
+    RouteNames.teacherStudentDetail => const TeacherStudentDetailPage(),
     RouteNames.teacherHistory => const TeacherHistoryPage(),
+    RouteNames.teacherNotifications => const TeacherNotificationPage(),
     RouteNames.teacherProfile => const TeacherProfilePage(),
 
     // Student
@@ -95,11 +97,9 @@ class AppRouter {
     RouteNames.studentProfile => const StudentProfilePage(),
     RouteNames.studentCourseDetail => const StudentCourseDetailPage(),
     RouteNames.studentMaterialDetail => const StudentMaterialDetailPage(),
-    RouteNames.studentHistory => const StudentHistoryPage(),
-    RouteNames.studentNotifications => const StudentNotificationPage(),
-    RouteNames.studentProfile => const StudentProfilePage(),
     RouteNames.studentQuiz => const QuizPage(),
     RouteNames.studentQuestion => const QuestionPage(),
+    RouteNames.studentQuizResult => const QuizResultPage(),
 
     _ => const _UnknownRoutePage(),
   };

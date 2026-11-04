@@ -30,18 +30,10 @@ class TeacherCoursesPage extends StatefulWidget {
 class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
   static const _tCourses = 'courses';
 
-  // Daftar kandidat nama tabel / kolom. Setelah tahu yang benar dari log,
-  // sisakan satu saja di tiap daftar.
   static const _enrollTables = ['enrollments'];
-  static const _materialTables = ['material', 'materials', 'materi', 'modules'];
-  static const _quizTables = ['quiz', 'quizzes'];
-  static const _courseCols = [
-    'course_id',
-    'courses_id',
-    'id_course',
-    'id_courses',
-    'course',
-  ];
+  static const _materialTables = ['materials'];
+  static const _quizTables = ['quizzes'];
+  static const _courseCols = ['course_id'];
 
   // Cache kombinasi (tabel, kolom) yang sudah terbukti berhasil.
   static final Map<String, (String, String)> _resolved = {};
@@ -126,12 +118,24 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
 
       final ids = rows.map<String>((r) => r['id'].toString()).toList();
 
-      final students =
-          await _countFlexible('siswa', _enrollTables, _courseCols, ids);
-      final materials =
-          await _countFlexible('materi', _materialTables, _courseCols, ids);
-      final quizzes =
-          await _countFlexible('quiz', _quizTables, _courseCols, ids);
+      final students = await _countFlexible(
+        'siswa',
+        _enrollTables,
+        _courseCols,
+        ids,
+      );
+      final materials = await _countFlexible(
+        'materi',
+        _materialTables,
+        _courseCols,
+        ids,
+      );
+      final quizzes = await _countFlexible(
+        'quiz',
+        _quizTables,
+        _courseCols,
+        ids,
+      );
 
       final list = rows.map<_CourseItem>((r) {
         final id = r['id'].toString();
@@ -263,8 +267,7 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
                       const SizedBox(height: 6),
                       Text(
                         '${c.students} Siswa',
-                        style:
-                            const TextStyle(fontSize: 8.5, color: Ui.muted),
+                        style: const TextStyle(fontSize: 8.5, color: Ui.muted),
                       ),
                     ],
                   ),

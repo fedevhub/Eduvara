@@ -68,6 +68,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
                 .from('quizzes')
                 .select()
                 .eq('course_id', _courseId!)
+                .eq('status', 'published')
                 .order('order_no');
             return List<Map<String, dynamic>>.from(rows as List);
           } on PostgrestException catch (e) {

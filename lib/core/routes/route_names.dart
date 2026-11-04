@@ -42,9 +42,6 @@ class RouteNames {
   static const studentProfile = '/student/profile';
   static const studentCourseDetail = '/student/courses/detail';
   static const studentMaterialDetail = '/student/materials/detail';
-  static const studentHistory = '/student/history';
-  static const studentNotifications = '/student/notifications';
-  static const studentProfile = '/student/profile';
   static const studentQuiz = '/student/quiz';
   static const studentQuestion = '/student/quiz/question';
   static const studentQuizResult = '/student/quiz/result';
