@@ -14,15 +14,9 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   // Kandidat nama tabel/kolom. Setelah tahu yang benar dari log, sisakan satu.
   static const _tCourses = 'courses';
   static const _tEnrollments = 'enrollments';
-  static const _materialTables = ['material', 'materials', 'materi', 'modules'];
-  static const _quizTables = ['quiz', 'quizzes'];
-  static const _courseCols = [
-    'course_id',
-    'courses_id',
-    'id_course',
-    'id_courses',
-    'course',
-  ];
+  static const _materialTables = ['materials'];
+  static const _quizTables = ['quizzes'];
+  static const _courseCols = ['course_id'];
 
   final _db = Supabase.instance.client;
 
@@ -69,14 +63,20 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     final d = DateTime.tryParse(v?.toString() ?? '')?.toLocal();
     if (d == null) return '';
     const days = [
-      'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu',
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
     ];
     String two(int n) => n.toString().padLeft(2, '0');
     return '${days[d.weekday - 1]}, ${two(d.day)}-${two(d.month)}-${d.year}';
   }
 
   Future<({String table, String col, List<Map<String, dynamic>> rows})?>
-      _findRows(List<String> tables, String? knownT, String? knownC) async {
+  _findRows(List<String> tables, String? knownT, String? knownC) async {
     final ts = knownT != null ? [knownT] : tables;
     final cs = knownC != null ? [knownC] : _courseCols;
     for (final t in ts) {
@@ -111,7 +111,8 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     if (_courseId == null) {
       setState(() {
         _loading = false;
-        _error = 'Course tidak ditemukan (id kosong).\n'
+        _error =
+            'Course tidak ditemukan (id kosong).\n'
             'Buka halaman ini dari daftar course.';
       });
       return;
@@ -130,44 +131,39 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
       var teacher = '-';
       final tid = course['teacher_id'];
       if (tid != null) {
-        try {
-          final p = await _db
-              .from('profiles')
-              .select('full_name')
-              .eq('id', tid)
-              .maybeSingle();
-          teacher = (p?['full_name'] ?? '-').toString();
-        } catch (e) {
-          debugPrint('Gagal ambil nama guru: $e');
-        }
+        final p = await _db
+            .from('profiles')
+            .select('full_name')
+            .eq('id', tid)
+            .maybeSingle();
+        teacher = (p?['full_name'] ?? '-').toString();
       }
 
       var percent = 0;
-      try {
-        final en = await _db
-            .from(_tEnrollments)
-            .select()
-            .eq('course_id', _courseId!);
-        debugPrint(
-          'Detail: kolom enrollments = '
-          '${en.isNotEmpty ? en.first.keys.toList() : 'kosong'}',
-        );
-
-        if (en.isNotEmpty) {
-          final withProgress = en.where((r) => r['progress'] is num).toList();
-          if (withProgress.isNotEmpty) {
-            final sum = withProgress.fold<num>(
-              0,
-              (a, r) => a + (r['progress'] as num),
+      final enrollments = await _db
+          .from(_tEnrollments)
+          .select('student_id')
+          .eq('course_id', _courseId!);
+      final materialIds = await _db
+          .from('materials')
+          .select('id')
+          .eq('course_id', _courseId!);
+      if (enrollments.isNotEmpty && materialIds.isNotEmpty) {
+        final progress = await _db
+            .from('material_progress')
+            .select('material_id')
+            .eq('completed', true)
+            .inFilter(
+              'user_id',
+              enrollments.map((row) => row['student_id']).toList(),
+            )
+            .inFilter(
+              'material_id',
+              materialIds.map((row) => row['id']).toList(),
             );
-            percent = (sum / withProgress.length).round();
-          } else if (en.any((r) => r.containsKey('status'))) {
-            final done = en.where((r) => r['status'] == 'completed').length;
-            percent = (done / en.length * 100).round();
-          }
-        }
-      } catch (e) {
-        debugPrint('Gagal hitung persentase: $e');
+        percent =
+            (progress.length / (enrollments.length * materialIds.length) * 100)
+                .round();
       }
 
       final mat = await _findRows(_materialTables, _matTable, _matCol);
@@ -224,9 +220,9 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     } catch (e) {
       debugPrint('[TeacherCourseDetail] Gagal hapus $what: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menghapus $what: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menghapus $what: $e')));
     }
   }
 
@@ -243,19 +239,18 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   // supaya router tidak menolak.
   Future<void> _goMaterialForm([Map<String, dynamic>? m]) async {
     if (m == null) {
-      await Navigator.pushNamed(context, RouteNames.teacherMaterialForm);
+      await Navigator.pushNamed(
+        context,
+        RouteNames.teacherMaterialForm,
+        arguments: {'course_id': _courseId},
+      );
     } else {
       await Navigator.pushNamed(
         context,
         RouteNames.teacherMaterialForm,
-        arguments: _pick(m, ['title', 'judul', 'name']),
+        arguments: {'id': m['id'], 'course_id': _courseId},
       );
     }
-    if (mounted) _load();
-  }
-
-  Future<void> _goQuestionForm() async {
-    await Navigator.pushNamed(context, RouteNames.teacherQuestionForm);
     if (mounted) _load();
   }
 
@@ -283,10 +278,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                     style: const TextStyle(fontSize: 11, color: Ui.muted),
                   ),
                   const SizedBox(height: 8),
-                  TextButton(
-                    onPressed: _load,
-                    child: const Text('Coba lagi'),
-                  ),
+                  TextButton(onPressed: _load, child: const Text('Coba lagi')),
                 ],
               ),
             ),
@@ -379,10 +371,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   Widget _empty(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 24),
     child: Center(
-      child: Text(
-        text,
-        style: const TextStyle(fontSize: 10, color: Ui.muted),
-      ),
+      child: Text(text, style: const TextStyle(fontSize: 10, color: Ui.muted)),
     ),
   );
 
@@ -476,7 +465,14 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.edit_outlined,
                 Ui.blueSoft,
                 Ui.blue,
-                _goQuestionForm,
+                () =>
+                    Navigator.pushNamed(
+                      context,
+                      RouteNames.teacherQuizForm,
+                      arguments: {'quiz_id': q['id'], 'course_id': _courseId},
+                    ).then((_) {
+                      if (mounted) _load();
+                    }),
               ),
               _iconBtn(
                 Icons.delete_outline,

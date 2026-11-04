@@ -39,7 +39,8 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
 
   String? _courseId;
   String? _materialId;
-  String? _argString; // String dari halaman sebelumnya: id course atau id materi
+  String?
+  _argString; // String dari halaman sebelumnya: id course atau id materi
 
   // File materi
   PlatformFile? _pickedFile;
@@ -59,7 +60,9 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
     if (_init) return;
     _init = true;
     final arg = ModalRoute.of(context)?.settings.arguments;
-    debugPrint('[TeacherMaterialForm] argumen diterima: $arg (${arg.runtimeType})');
+    debugPrint(
+      '[TeacherMaterialForm] argumen diterima: $arg (${arg.runtimeType})',
+    );
     if (arg is String) {
       _argString = arg.trim();
     } else if (arg is Map) {
@@ -123,7 +126,6 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
         _existingFileUrl = m['file_url']?.toString();
         _existingFileName = m['file_name']?.toString();
       }
-
     } catch (e) {
       debugPrint('[TeacherMaterialForm] Gagal memuat data: $e');
       _loadError = 'Gagal memuat data: $e';
@@ -133,11 +135,11 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
   }
 
   Future<void> _pickFile() async {
-final res = await FilePicker.pickFiles(
-  type: FileType.custom,
-  allowedExtensions: const ['pdf', 'doc', 'docx'],
-  withData: true,
-);
+    final res = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['pdf', 'doc', 'docx'],
+      withData: true,
+    );
     if (res == null || res.files.isEmpty) return;
     final f = res.files.first;
     if (f.size > _maxFileBytes) {
@@ -148,10 +150,10 @@ final res = await FilePicker.pickFiles(
   }
 
   void _clearFile() => setState(() {
-        _pickedFile = null;
-        _existingFileUrl = null;
-        _existingFileName = null;
-      });
+    _pickedFile = null;
+    _existingFileUrl = null;
+    _existingFileName = null;
+  });
 
   Future<Map<String, String>?> _uploadFile(String uid) async {
     final f = _pickedFile;
@@ -170,10 +172,14 @@ final res = await FilePicker.pickFiles(
     final materialName = title.text.trim();
 
     if (_courseId == null) {
-      return _snack('Course tidak diketahui. Buka halaman ini dari detail course.');
+      return _snack(
+        'Course tidak diketahui. Buka halaman ini dari detail course.',
+      );
     }
     if (materialName.isEmpty) return _snack('Judul materi wajib diisi.');
-    if (desc.text.trim().isEmpty) return _snack('Deskripsi materi wajib diisi.');
+    if (desc.text.trim().isEmpty) {
+      return _snack('Deskripsi materi wajib diisi.');
+    }
     if (body.text.trim().isEmpty) return _snack('Isi materi wajib diisi.');
 
     final uid = _db.auth.currentUser?.id;
@@ -304,7 +310,11 @@ final res = await FilePicker.pickFiles(
     final selected = body.text.substring(start, end);
     final url = await _askUrl('Masukkan link');
     if (url == null || url.isEmpty) return;
-    _wrapWith('[${selected.isEmpty ? 'teks link' : selected}]($url)', start, end);
+    _wrapWith(
+      '[${selected.isEmpty ? 'teks link' : selected}]($url)',
+      start,
+      end,
+    );
   }
 
   Future<void> _insertImage() async {
@@ -326,16 +336,16 @@ final res = await FilePicker.pickFiles(
   }
 
   Widget _tool(Widget child, String tip, VoidCallback onTap) => Tooltip(
-        message: tip,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.only(right: 12, top: 2, bottom: 2),
-            child: child,
-          ),
-        ),
-      );
+    message: tip,
+    child: InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.only(right: 12, top: 2, bottom: 2),
+        child: child,
+      ),
+    ),
+  );
 
   // ───────────────────────── UI ─────────────────────────
 
@@ -393,8 +403,10 @@ final res = await FilePicker.pickFiles(
           child: Column(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
                 decoration: const BoxDecoration(
                   color: Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
@@ -402,24 +414,35 @@ final res = await FilePicker.pickFiles(
                 child: Row(
                   children: [
                     _tool(
-                      const Text('B',
-                          style: TextStyle(
-                              fontSize: 11, fontWeight: FontWeight.w900)),
+                      const Text(
+                        'B',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       'Tebal',
                       () => _wrap('**', '**'),
                     ),
                     _tool(
-                      const Text('I',
-                          style: TextStyle(
-                              fontSize: 11, fontStyle: FontStyle.italic)),
+                      const Text(
+                        'I',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                       'Miring',
                       () => _wrap('*', '*'),
                     ),
                     _tool(
-                      const Text('U',
-                          style: TextStyle(
-                              fontSize: 11,
-                              decoration: TextDecoration.underline)),
+                      const Text(
+                        'U',
+                        style: TextStyle(
+                          fontSize: 11,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
                       'Garis bawah',
                       () => _wrap('<u>', '</u>'),
                     ),
@@ -455,8 +478,7 @@ final res = await FilePicker.pickFiles(
                   isDense: true,
                   border: InputBorder.none,
                   hintText: 'Tulis isi materi disini',
-                  hintStyle:
-                      TextStyle(fontSize: 11, color: Color(0xFFB6BFCC)),
+                  hintStyle: TextStyle(fontSize: 11, color: Color(0xFFB6BFCC)),
                   contentPadding: EdgeInsets.all(10),
                 ),
               ),
@@ -482,8 +504,11 @@ final res = await FilePicker.pickFiles(
                     color: Ui.greenSoft,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Icon(Icons.description_outlined,
-                      size: 15, color: Ui.greenDark),
+                  child: const Icon(
+                    Icons.description_outlined,
+                    size: 15,
+                    color: Ui.greenDark,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(

@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
-import '../../../repositories/activity_repository.dart';
 
 class _Soal {
   final String q;
   final List<String> options;
-  const _Soal(this.q, this.options);
+  final int correctOption;
+  final int points;
+  const _Soal(this.q, this.options, this.correctOption, this.points);
 }
 
 class QuestionPage extends StatefulWidget {
@@ -17,39 +19,94 @@ class QuestionPage extends StatefulWidget {
 }
 
 class _QuestionPageState extends State<QuestionPage> {
-  static const _soal = [
-    _Soal('Sederhanakan bentuk aljabar berikut: 3x + 5x − 2x = ...', [
-      '4x',
-      '5x',
-      '6x',
-      '10x',
-    ]),
-    _Soal('Diketahui x = 4. Berapakah nilai dari 2x + 7?', [
-      '11',
-      '13',
-      '15',
-      '17',
-    ]),
-    _Soal('Koefisien dari variabel x pada bentuk aljabar 7x + 3 adalah ...', [
-      '3',
-      '7',
-      'x',
-      '10',
-    ]),
-    _Soal('Hasil dari 5a − 2a + a adalah ...', ['2a', '3a', '4a', '8a']),
-    _Soal('Jika 2x + 6 = 14, maka nilai x adalah ...', ['2', '3', '4', '5']),
-  ];
+  final _db = Supabase.instance.client;
 
+  List<_Soal> _soal = [];
   int current = 0;
   final Map<int, int> answers = {};
-  Duration remaining = const Duration(minutes: 20);
+  Duration remaining = Duration.zero;
   Timer? _timer;
-  final _activityRepository = ActivityRepository();
   bool _finishing = false;
+  bool _initialized = false;
+  bool _loading = true;
+  String? _error;
+  String _quizTitle = 'Quiz';
 
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_initialized) return;
+    _initialized = true;
+    _load();
+  }
+
+  Future<void> _load() async {
+    final arguments = ModalRoute.of(context)?.settings.arguments;
+    final quizId = arguments is Map ? arguments['id']?.toString() : null;
+    if (quizId == null || quizId.isEmpty) {
+      setState(() {
+        _error = 'Quiz tidak ditemukan. Kembali ke course dan coba lagi.';
+        _loading = false;
+      });
+      return;
+    }
+
+    try {
+      final quiz = await _db
+          .from('quizzes')
+          .select('title, duration_minutes')
+          .eq('id', quizId)
+          .single();
+      final rows = await _db
+          .from('quiz_questions')
+          .select(
+            'question, option_a, option_b, option_c, option_d, correct_option, points',
+          )
+          .eq('quiz_id', quizId)
+          .order('id');
+      final questions = List<Map<String, dynamic>>.from(rows)
+          .map(
+            (row) => _Soal(
+              row['question']?.toString() ?? '',
+              [
+                row['option_a']?.toString() ?? '',
+                row['option_b']?.toString() ?? '',
+                row['option_c']?.toString() ?? '',
+                row['option_d']?.toString() ?? '',
+              ],
+              (row['correct_option'] as num?)?.toInt() ?? 0,
+              (row['points'] as num?)?.toInt() ?? 1,
+            ),
+          )
+          .toList();
+      if (questions.isEmpty) {
+        throw Exception('Quiz ini belum memiliki soal.');
+      }
+      if (!mounted) return;
+      setState(() {
+        _quizTitle = quiz['title']?.toString() ?? 'Quiz';
+        _soal = questions;
+        remaining = Duration(
+          minutes: (quiz['duration_minutes'] as num?)?.toInt() ?? 20,
+        );
+        _loading = false;
+      });
+      _startTimer();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Gagal memuat soal quiz: $e';
+        _loading = false;
+      });
+    }
+  }
+
+  void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
       if (remaining.inSeconds <= 0) {
@@ -77,24 +134,61 @@ class _QuestionPageState extends State<QuestionPage> {
     _finishing = true;
     _timer?.cancel();
     final arguments = ModalRoute.of(context)?.settings.arguments;
-    final quizTitle = arguments is Map && arguments['entity_name'] != null
-        ? arguments['entity_name'].toString()
-        : 'Quiz';
+    final quizTitle = _quizTitle;
     try {
-      await _activityRepository.record(
-        action: 'submit',
-        entity: 'quiz',
-        entityName: quizTitle,
+      final quizId = arguments is Map ? arguments['id']?.toString() : null;
+      final userId = _db.auth.currentUser?.id;
+      if (quizId == null || quizId.isEmpty) {
+        throw Exception(
+          'Quiz tidak ditemukan. Kembali ke course dan coba lagi.',
+        );
+      }
+      if (userId == null) {
+        throw Exception('Sesi login berakhir, silakan login ulang.');
+      }
+
+      var correct = 0;
+      var earnedPoints = 0;
+      final totalPoints = _soal.fold<int>(
+        0,
+        (total, question) => total + question.points,
       );
+      for (var i = 0; i < _soal.length; i++) {
+        if (answers[i] == _soal[i].correctOption) {
+          correct++;
+          earnedPoints += _soal[i].points;
+        }
+      }
+      final wrong = _soal.length - correct;
+      final score = totalPoints == 0
+          ? 0
+          : (earnedPoints / totalPoints * 100).round();
+      final attempt = await _db
+          .from('quiz_attempts')
+          .insert({
+            'user_id': userId,
+            'quiz_id': quizId,
+            'score': score,
+            'correct_count': correct,
+            'wrong_count': wrong,
+            'completed': true,
+          })
+          .select('id')
+          .single();
+
       if (mounted) {
-        Navigator.pushReplacementNamed(context, RouteNames.studentQuizResult);
+        Navigator.pushReplacementNamed(
+          context,
+          RouteNames.studentQuizResult,
+          arguments: {'attempt_id': attempt['id'], 'entity_name': quizTitle},
+        );
       }
     } catch (e) {
       _finishing = false;
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim aktivitas quiz: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal menyimpan hasil quiz: $e')));
     }
   }
 
@@ -115,6 +209,38 @@ class _QuestionPageState extends State<QuestionPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Ui.bg,
+        body: SafeArea(child: Center(child: CircularProgressIndicator())),
+      );
+    }
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: Ui.bg,
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 11, color: Ui.muted),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Kembali'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     final soal = _soal[current];
     final last = current == _soal.length - 1;
     return Scaffold(
