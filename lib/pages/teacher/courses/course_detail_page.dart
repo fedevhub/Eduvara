@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
-import '../../../repositories/activity_repository.dart';
 
 class TeacherCourseDetailPage extends StatefulWidget {
   const TeacherCourseDetailPage({super.key});
@@ -25,7 +24,6 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     'course',
   ];
 
-  final _activityRepository = ActivityRepository();
   final _db = Supabase.instance.client;
 
   int tab = 0;
@@ -233,61 +231,12 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   }
 
   Future<void> _addQuiz() async {
-    final title = TextEditingController();
-    final quizTitle = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Tambah Quiz'),
-        content: TextField(
-          controller: title,
-          autofocus: true,
-          decoration: const InputDecoration(labelText: 'Judul quiz'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, title.text.trim()),
-            child: const Text('Simpan'),
-          ),
-        ],
-      ),
+    await Navigator.pushNamed(
+      context,
+      RouteNames.teacherQuizForm,
+      arguments: _courseId,
     );
-    title.dispose();
-
-    if (quizTitle == null || quizTitle.isEmpty || !mounted) return;
-
-    try {
-      await _db.from(_quizTable ?? _quizTables.first).insert({
-        'title': quizTitle,
-        _quizCol ?? 'course_id': _courseId,
-      });
-    } catch (e) {
-      debugPrint('[TeacherCourseDetail] Gagal simpan quiz: $e');
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal menyimpan quiz: $e')),
-      );
-      return;
-    }
-
-    try {
-      await _activityRepository.record(
-        action: 'insert',
-        entity: 'quiz',
-        entityName: quizTitle,
-      );
-    } catch (e) {
-      debugPrint('[TeacherCourseDetail] Gagal mencatat aktivitas quiz: $e');
-    }
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Quiz berhasil ditambahkan.')),
-    );
-    _load();
+    if (mounted) _load();
   }
 
   // Navigasi ke halaman lain: bentuk arguments SAMA seperti file asli
