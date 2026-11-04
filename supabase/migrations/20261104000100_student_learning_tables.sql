@@ -2,31 +2,54 @@
 -- progress tracking, and notifications.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS public.materials (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id uuid NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
-  title text NOT NULL,
-  content text DEFAULT '',
-  summary text DEFAULT '',
-  file_name text DEFAULT '',
-  file_size bigint DEFAULT 0,
-  file_url text DEFAULT '',
-  scheduled_at timestamptz,
-  order_no integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+DO $$
+DECLARE
+  course_id_type text;
+BEGIN
+  SELECT format_type(attribute.atttypid, attribute.atttypmod)
+  INTO course_id_type
+  FROM pg_attribute AS attribute
+  WHERE attribute.attrelid = 'public.courses'::regclass
+    AND attribute.attname = 'id'
+    AND NOT attribute.attisdropped;
 
-CREATE TABLE IF NOT EXISTS public.quizzes (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  course_id uuid NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
-  title text NOT NULL,
-  description text DEFAULT '',
-  question_count integer NOT NULL DEFAULT 0,
-  duration_minutes integer NOT NULL DEFAULT 0,
-  passing_score integer NOT NULL DEFAULT 0,
-  order_no integer NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+  IF course_id_type IS NULL THEN
+    RAISE EXCEPTION 'public.courses must have an id column before student learning tables can be created.';
+  END IF;
+
+  EXECUTE format(
+    'CREATE TABLE IF NOT EXISTS public.materials (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      course_id %s NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+      title text NOT NULL,
+      content text DEFAULT '''',
+      summary text DEFAULT '''',
+      file_name text DEFAULT '''',
+      file_size bigint DEFAULT 0,
+      file_url text DEFAULT '''',
+      scheduled_at timestamptz,
+      order_no integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )',
+    course_id_type
+  );
+
+  EXECUTE format(
+    'CREATE TABLE IF NOT EXISTS public.quizzes (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      course_id %s NOT NULL REFERENCES public.courses(id) ON DELETE CASCADE,
+      title text NOT NULL,
+      description text DEFAULT '''',
+      question_count integer NOT NULL DEFAULT 0,
+      duration_minutes integer NOT NULL DEFAULT 0,
+      passing_score integer NOT NULL DEFAULT 0,
+      order_no integer NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )',
+    course_id_type
+  );
+END;
+$$;
 
 CREATE TABLE IF NOT EXISTS public.material_progress (
   user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -57,6 +80,25 @@ CREATE TABLE IF NOT EXISTS public.notifications (
   is_read boolean NOT NULL DEFAULT false
 );
 
+ALTER TABLE public.notifications
+  ADD COLUMN IF NOT EXISTS id uuid DEFAULT gen_random_uuid(),
+  ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS message text NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+  ADD COLUMN IF NOT EXISTS is_read boolean NOT NULL DEFAULT false;
+
+UPDATE public.notifications
+SET id = gen_random_uuid()
+WHERE id IS NULL;
+
+ALTER TABLE public.notifications
+  ALTER COLUMN id SET DEFAULT gen_random_uuid(),
+  ALTER COLUMN id SET NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS notifications_id_idx
+  ON public.notifications(id);
+
 ALTER TABLE public.materials ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quizzes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.material_progress ENABLE ROW LEVEL SECURITY;
@@ -73,14 +115,14 @@ USING (
   OR EXISTS (
     SELECT 1
     FROM public.courses AS c
-    WHERE c.id = materials.course_id
-      AND c.teacher_id = auth.uid()
+    WHERE c.id::text = materials.course_id::text
+      AND c.teacher_id::text = auth.uid()::text
   )
   OR EXISTS (
     SELECT 1
     FROM public.enrollments AS e
-    WHERE e.course_id = materials.course_id
-      AND e.student_id = auth.uid()
+    WHERE e.course_id::text = materials.course_id::text
+      AND e.student_id::text = auth.uid()::text
   )
 );
 
@@ -94,14 +136,14 @@ USING (
   OR EXISTS (
     SELECT 1
     FROM public.courses AS c
-    WHERE c.id = quizzes.course_id
-      AND c.teacher_id = auth.uid()
+    WHERE c.id::text = quizzes.course_id::text
+      AND c.teacher_id::text = auth.uid()::text
   )
   OR EXISTS (
     SELECT 1
     FROM public.enrollments AS e
-    WHERE e.course_id = quizzes.course_id
-      AND e.student_id = auth.uid()
+    WHERE e.course_id::text = quizzes.course_id::text
+      AND e.student_id::text = auth.uid()::text
   )
 );
 
@@ -110,30 +152,30 @@ CREATE POLICY authenticated_manage_material_progress
 ON public.material_progress
 FOR ALL
 TO authenticated
-USING (user_id = auth.uid() OR public.is_admin())
-WITH CHECK (user_id = auth.uid() OR public.is_admin());
+USING (user_id::text = auth.uid()::text OR public.is_admin())
+WITH CHECK (user_id::text = auth.uid()::text OR public.is_admin());
 
 DROP POLICY IF EXISTS authenticated_manage_quiz_attempts ON public.quiz_attempts;
 CREATE POLICY authenticated_manage_quiz_attempts
 ON public.quiz_attempts
 FOR ALL
 TO authenticated
-USING (user_id = auth.uid() OR public.is_admin())
-WITH CHECK (user_id = auth.uid() OR public.is_admin());
+USING (user_id::text = auth.uid()::text OR public.is_admin())
+WITH CHECK (user_id::text = auth.uid()::text OR public.is_admin());
 
 DROP POLICY IF EXISTS authenticated_read_notifications ON public.notifications;
 CREATE POLICY authenticated_read_notifications
 ON public.notifications
 FOR SELECT
 TO authenticated
-USING (user_id = auth.uid() OR user_id IS NULL OR public.is_admin());
+USING (user_id::text = auth.uid()::text OR user_id IS NULL OR public.is_admin());
 
 DROP POLICY IF EXISTS authenticated_insert_notifications ON public.notifications;
 CREATE POLICY authenticated_insert_notifications
 ON public.notifications
 FOR INSERT
 TO authenticated
-WITH CHECK (user_id = auth.uid() OR user_id IS NULL OR public.is_admin());
+WITH CHECK (user_id::text = auth.uid()::text OR user_id IS NULL OR public.is_admin());
 
 GRANT SELECT ON public.materials TO authenticated;
 GRANT SELECT ON public.quizzes TO authenticated;

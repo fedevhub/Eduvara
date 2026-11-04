@@ -4,7 +4,7 @@ import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 
 class _Q {
-  int? id; // id baris di tabel questions (null = belum tersimpan)
+  String? id;
   final question = TextEditingController();
   final options = List.generate(4, (_) => TextEditingController());
   final points = TextEditingController(text: '20');
@@ -13,11 +13,11 @@ class _Q {
   _Q();
 
   _Q.fromRow(Map<String, dynamic> r) {
-    id = int.tryParse('${r['id']}');
+    id = r['id']?.toString();
     question.text = (r['question'] ?? '').toString();
     for (var i = 0; i < 4; i++) {
-      options[i].text =
-          (r['option_${String.fromCharCode(97 + i)}'] ?? '').toString();
+      options[i].text = (r['option_${String.fromCharCode(97 + i)}'] ?? '')
+          .toString();
     }
     points.text = '${r['points'] ?? 20}';
     correct = (int.tryParse('${r['correct_option']}') ?? 0).clamp(0, 3);
@@ -50,17 +50,18 @@ class TeacherQuestionFormPage extends StatefulWidget {
 }
 
 class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
-  static const _questionTable = 'questions';
-  static const _quizTable = 'quiz';
-  static const _quizKeys = ['id', 'quiz_id', 'id_quiz', 'quizid', 'uuid'];
+  static const _questionTable = 'quiz_questions';
+  static const _quizTable = 'quizzes';
+  static const _quizKeys = ['id'];
 
   final _db = Supabase.instance.client;
 
   final List<_Q> questions = [];
-  final List<int> _deletedIds = [];
+  final List<String> _deletedIds = [];
 
   Object? _quizId;
   String _quizTitle = '';
+  String _quizStatus = 'draft';
 
   bool _init = false;
   bool _loading = true;
@@ -68,8 +69,7 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
   String? _loadError;
 
   /// id quiz sebagai angka kalau memang angka (kolom bigint), kalau tidak apa adanya.
-  Object? get _quizValue =>
-      _quizId == null ? null : (int.tryParse('$_quizId') ?? _quizId);
+  Object? get _quizValue => _quizId;
 
   @override
   void didChangeDependencies() {
@@ -78,8 +78,9 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
     _init = true;
     final arg = ModalRoute.of(context)?.settings.arguments;
     if (arg is Map) {
-      _quizId = arg['quiz_id'];
+      _quizId = arg['quiz_id']?.toString();
       _quizTitle = (arg['quiz_title'] ?? '').toString();
+      _quizStatus = (arg['status'] ?? 'draft').toString();
     }
     _load();
   }
@@ -111,8 +112,16 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
             .eq('quiz_id', _quizValue!)
             .order('id'),
       );
-      debugPrint('[TeacherQuestionForm] ${rows.length} soal dimuat'
-          '${rows.isNotEmpty ? ', kolom: ${rows.first.keys.toList()}' : ''}');
+      final quiz = await _db
+          .from(_quizTable)
+          .select('status')
+          .eq('id', _quizValue!)
+          .single();
+      _quizStatus = (quiz['status'] ?? _quizStatus).toString();
+      debugPrint(
+        '[TeacherQuestionForm] ${rows.length} soal dimuat'
+        '${rows.isNotEmpty ? ', kolom: ${rows.first.keys.toList()}' : ''}',
+      );
 
       for (final q in questions) {
         q.dispose();
@@ -124,7 +133,9 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
       _deletedIds.clear();
     } catch (e) {
       debugPrint('[TeacherQuestionForm] Gagal memuat data: $e');
-      _loadError = '$e'.startsWith('Quiz tidak') ? '$e' : 'Gagal memuat data: $e';
+      _loadError = '$e'.startsWith('Quiz tidak')
+          ? '$e'
+          : 'Gagal memuat data: $e';
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -159,15 +170,15 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
   }
 
   Map<String, dynamic> _toRow(_Q q) => {
-        'quiz_id': _quizValue,
-        'question': q.question.text.trim(),
-        'option_a': q.options[0].text.trim(),
-        'option_b': q.options[1].text.trim(),
-        'option_c': q.options[2].text.trim(),
-        'option_d': q.options[3].text.trim(),
-        'correct_option': q.correct,
-        'points': int.tryParse(q.points.text.trim()) ?? 0,
-      };
+    'quiz_id': _quizValue,
+    'question': q.question.text.trim(),
+    'option_a': q.options[0].text.trim(),
+    'option_b': q.options[1].text.trim(),
+    'option_c': q.options[2].text.trim(),
+    'option_d': q.options[3].text.trim(),
+    'correct_option': q.correct,
+    'points': int.tryParse(q.points.text.trim()) ?? 0,
+  };
 
   Future<bool> _saveQuestions() async {
     try {
@@ -188,11 +199,22 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
         if (q.id != null) {
           await _db.from(_questionTable).update(_toRow(q)).eq('id', q.id!);
         } else {
-          final created =
-              await _db.from(_questionTable).insert(_toRow(q)).select('id').single();
-          q.id = int.tryParse('${created['id']}');
+          final created = await _db
+              .from(_questionTable)
+              .insert(_toRow(q))
+              .select('id')
+              .single();
+          q.id = created['id']?.toString();
         }
       }
+      await _db
+          .from(_quizTable)
+          .update({
+            'question_count': questions
+                .where((question) => !question.isBlank)
+                .length,
+          })
+          .eq('id', _quizValue!);
       return true;
     } catch (e) {
       debugPrint('[TeacherQuestionForm] Gagal menyimpan soal: $e');
@@ -205,12 +227,17 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
   Future<bool> _setStatus(String status) async {
     for (final k in _quizKeys) {
       try {
-        await _db.from(_quizTable).update({'status': status}).eq(k, _quizValue!);
+        await _db
+            .from(_quizTable)
+            .update({'status': status})
+            .eq(k, _quizValue!);
         return true;
       } on PostgrestException catch (e) {
         final msg = e.message.toLowerCase();
         if (msg.contains('status')) {
-          debugPrint('[TeacherQuestionForm] Kolom status belum ada: ${e.message}');
+          debugPrint(
+            '[TeacherQuestionForm] Kolom status belum ada: ${e.message}',
+          );
           return false;
         }
         if (e.code == '42703') continue; // kolom kunci salah, coba nama lain
@@ -229,7 +256,7 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
     final ok = await _saveQuestions();
     if (ok) {
       try {
-        await _setStatus('draft');
+        await _setStatus(_quizStatus == 'published' ? 'published' : 'draft');
       } catch (e) {
         debugPrint('[TeacherQuestionForm] Gagal set status draft: $e');
       }
@@ -258,7 +285,9 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
       try {
         done = await _setStatus('published');
         if (!done) {
-          _snack("Soal tersimpan, tapi kolom 'status' belum ada di tabel quiz.");
+          _snack(
+            "Soal tersimpan, tapi kolom 'status' belum ada di tabel quiz.",
+          );
         }
       } catch (e) {
         debugPrint('[TeacherQuestionForm] Gagal mempublikasi: $e');
@@ -294,120 +323,124 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
   // ───────────────────────── UI ─────────────────────────
 
   Widget _questionBlock(int index, _Q q) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          EduCard(
-            padding: const EdgeInsets.all(12),
-            child: Row(
-              children: [
-                _chip('${index + 1}', true),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: TextField(
-                    controller: q.question,
-                    maxLines: null,
-                    style: const TextStyle(
-                        fontSize: 10, fontWeight: FontWeight.w700),
-                    decoration: const InputDecoration(
-                      isCollapsed: true,
-                      border: InputBorder.none,
-                      hintText: 'Tulis pertanyaan disini',
-                      hintStyle:
-                          TextStyle(fontSize: 10, color: Color(0xFFB6BFCC)),
-                    ),
-                  ),
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      EduCard(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            _chip('${index + 1}', true),
+            const SizedBox(width: 10),
+            Expanded(
+              child: TextField(
+                controller: q.question,
+                maxLines: null,
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
                 ),
-                if (questions.length > 1)
-                  InkWell(
-                    onTap: _saving ? null : () => _removeQuestion(index),
-                    child: const Padding(
-                      padding: EdgeInsets.only(left: 6),
-                      child: Icon(Icons.close, size: 14, color: Ui.muted),
-                    ),
-                  ),
-              ],
+                decoration: const InputDecoration(
+                  isCollapsed: true,
+                  border: InputBorder.none,
+                  hintText: 'Tulis pertanyaan disini',
+                  hintStyle: TextStyle(fontSize: 10, color: Color(0xFFB6BFCC)),
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          for (var i = 0; i < 4; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: GestureDetector(
-                onTap: () => setState(() => q.correct = i),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-                  decoration: BoxDecoration(
-                    color: q.correct == i ? Ui.blueTint : Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: q.correct == i ? Ui.blue : Ui.line,
-                    ),
-                    boxShadow: Ui.shadow,
-                  ),
-                  child: Row(
-                    children: [
-                      _chip(String.fromCharCode(65 + i), q.correct == i),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: q.options[i],
-                          style: const TextStyle(
-                              fontSize: 10, fontWeight: FontWeight.w600),
-                          decoration: const InputDecoration(
-                            isCollapsed: true,
-                            border: InputBorder.none,
-                            hintText: 'Pilihan jawaban',
-                            hintStyle: TextStyle(
-                                fontSize: 10, color: Color(0xFFB6BFCC)),
-                          ),
+            if (questions.length > 1)
+              InkWell(
+                onTap: _saving ? null : () => _removeQuestion(index),
+                child: const Padding(
+                  padding: EdgeInsets.only(left: 6),
+                  child: Icon(Icons.close, size: 14, color: Ui.muted),
+                ),
+              ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 10),
+      for (var i = 0; i < 4; i++)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: GestureDetector(
+            onTap: () => setState(() => q.correct = i),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              decoration: BoxDecoration(
+                color: q.correct == i ? Ui.blueTint : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: q.correct == i ? Ui.blue : Ui.line),
+                boxShadow: Ui.shadow,
+              ),
+              child: Row(
+                children: [
+                  _chip(String.fromCharCode(65 + i), q.correct == i),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: q.options[i],
+                      style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: const InputDecoration(
+                        isCollapsed: true,
+                        border: InputBorder.none,
+                        hintText: 'Pilihan jawaban',
+                        hintStyle: TextStyle(
+                          fontSize: 10,
+                          color: Color(0xFFB6BFCC),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
-          const Padding(
-            padding: EdgeInsets.only(top: 4, bottom: 4),
-            child: Text('Nilai', style: TextStyle(fontSize: 10)),
           ),
-          Row(
-            children: [
-              SizedBox(
-                width: 110,
-                child: EduField(
-                  hint: '20',
-                  controller: q.points,
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              const SizedBox(width: 10),
-              const Text('Poin',
-                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700)),
-            ],
+        ),
+      const Padding(
+        padding: EdgeInsets.only(top: 4, bottom: 4),
+        child: Text('Nilai', style: TextStyle(fontSize: 10)),
+      ),
+      Row(
+        children: [
+          SizedBox(
+            width: 110,
+            child: EduField(
+              hint: '20',
+              controller: q.points,
+              keyboardType: TextInputType.number,
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(width: 10),
+          const Text(
+            'Poin',
+            style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+          ),
         ],
-      );
+      ),
+      const SizedBox(height: 16),
+    ],
+  );
 
   Widget _chip(String t, bool active) => Container(
-        width: 20,
-        height: 20,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active ? Ui.blue : Ui.blueTint,
-          borderRadius: BorderRadius.circular(5),
-        ),
-        child: Text(
-          t,
-          style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.w700,
-            color: active ? Colors.white : Ui.blue,
-          ),
-        ),
-      );
+    width: 20,
+    height: 20,
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: active ? Ui.blue : Ui.blueTint,
+      borderRadius: BorderRadius.circular(5),
+    ),
+    child: Text(
+      t,
+      style: TextStyle(
+        fontSize: 8,
+        fontWeight: FontWeight.w700,
+        color: active ? Colors.white : Ui.blue,
+      ),
+    ),
+  );
 
   Widget _body() {
     if (_loading) {
@@ -511,8 +544,9 @@ class _TeacherQuestionFormPageState extends State<TeacherQuestionFormPage> {
                       label: 'Tambah Soal',
                       bg: Ui.blue,
                       height: 34,
-                      onTap:
-                          ready ? () => setState(() => questions.add(_Q())) : null,
+                      onTap: ready
+                          ? () => setState(() => questions.add(_Q()))
+                          : null,
                     ),
                   ),
                   const SizedBox(width: 8),

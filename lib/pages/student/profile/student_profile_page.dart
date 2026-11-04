@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../core/routes/route_names.dart';
 
 class StudentProfilePage extends StatefulWidget {
@@ -33,20 +32,31 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     try {
       data = await _db
           .from('profiles')
-          .select('full_name, role, status, class_name, created_at')
+          .select('full_name, role, created_at')
           .eq('id', user.id)
           .maybeSingle();
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
     }
 
+    final userData = await _db
+        .from('user')
+        .select('nama_lengkap, email, status, kelas, created_at')
+        .eq('id_user', user.id)
+        .maybeSingle();
+
     return {
-      'full_name': data?['full_name'] ?? user.userMetadata?['full_name'] ?? '-',
-      'email': user.email ?? '-',
-      'role': data?['role'],
-      'status': data?['status'],
-      'class_name': data?['class_name'],
-      'created_at': data?['created_at'] ?? user.createdAt,
+      'full_name':
+          data?['full_name'] ??
+          userData?['nama_lengkap'] ??
+          user.userMetadata?['full_name'] ??
+          '-',
+      'email': user.email ?? userData?['email'] ?? '-',
+      'role': data?['role'] ?? 'student',
+      'status': userData?['status'],
+      'class_name': userData?['kelas'],
+      'created_at':
+          data?['created_at'] ?? userData?['created_at'] ?? user.createdAt,
     };
   }
 
@@ -118,38 +128,27 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     }
   }
 
-  Widget _header(String name, String email) => Container(
+  Widget _profileHeader(String name, String email) => Container(
     width: double.infinity,
     padding: EdgeInsets.fromLTRB(
       20,
-      MediaQuery.of(context).padding.top + 24,
+      MediaQuery.of(context).padding.top + 8,
       20,
       22,
     ),
     decoration: const BoxDecoration(
-      gradient: Ui.gradientTop,
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [Colors.white, Color(0xFF93B4F8), Ui.blue],
+      ),
       borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
     ),
     child: Column(
       children: [
-        Container(
-          width: 64,
-          height: 64,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              name == '-' ? '?' : Formatters.initials(name),
-              style: const TextStyle(
-                color: Ui.navy,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-        ),
+        const Align(alignment: Alignment.centerLeft, child: BackLink()),
+        const SizedBox(height: 4),
+        DarkAvatar(name: name, size: 64),
         const SizedBox(height: 8),
         Text(
           name,
@@ -212,18 +211,25 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         return SingleChildScrollView(
           child: Column(
             children: [
-              _header(p['full_name'].toString(), p['email'].toString()),
+              _profileHeader(p['full_name'].toString(), p['email'].toString()),
               Padding(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
                   children: [
                     EduCard(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 6,
-                      ),
+                      padding: const EdgeInsets.all(14),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text(
+                            'Informasi Akun',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _Row('Email', p['email'].toString()),
                           _Row('Role', _role(p['role'])),
                           _Row('Status', _status(p['status'])),
                           _Row('Kelas', p['class_name']?.toString() ?? '-'),
@@ -270,7 +276,13 @@ class _Row extends StatelessWidget {
             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
           ),
         ),
-        Text(v, style: const TextStyle(fontSize: 10, color: Ui.muted)),
+        Flexible(
+          child: Text(
+            v,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontSize: 10, color: Ui.muted),
+          ),
+        ),
       ],
     ),
   );
