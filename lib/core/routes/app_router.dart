@@ -30,6 +30,15 @@ import '../../pages/student/notifications/notification_page.dart';
 import '../../pages/student/profile/student_profile_page.dart';
 import '../../pages/student/quizzes/question_page.dart';
 import '../../pages/student/quizzes/quiz_page.dart';
+import '../../pages/student/history/history_page.dart';
+import '../../pages/student/notifications/notification_page.dart';
+import '../../pages/student/profile/student_profile_page.dart';
+import '../../pages/teacher/courses/course_detail_page.dart';
+import '../../pages/teacher/courses/teacher_course_page.dart';
+import '../../pages/teacher/history/history_page.dart';
+import '../../pages/teacher/materials/material_form_page.dart';
+import '../../pages/teacher/profile/teacher_profile_page.dart';
+import '../../pages/teacher/students/student_list_page.dart';
 import '../../pages/teacher/teacher_dashboard_page.dart';
 
 import 'route_names.dart';
@@ -67,10 +76,19 @@ class AppRouter {
 
     // Teacher
     RouteNames.teacherDashboard => const TeacherDashboardPage(),
+    RouteNames.teacherCourses => const TeacherCoursesPage(),
+    RouteNames.teacherCourseDetail => const TeacherCourseDetailPage(),
+    RouteNames.teacherMaterialForm => const TeacherMaterialFormPage(),
+    RouteNames.teacherStudents => const TeacherStudentListPage(),
+    RouteNames.teacherHistory => const TeacherHistoryPage(),
+    RouteNames.teacherProfile => const TeacherProfilePage(),
 
     // Student
     RouteNames.studentDashboard => const StudentDashboardPage(),
     RouteNames.studentCourses => const StudentCoursesPage(),
+    RouteNames.studentHistory => const StudentHistoryPage(),
+    RouteNames.studentNotifications => const StudentNotificationPage(),
+    RouteNames.studentProfile => const StudentProfilePage(),
     RouteNames.studentCourseDetail => const StudentCourseDetailPage(),
     RouteNames.studentMaterialDetail => const StudentMaterialDetailPage(),
     RouteNames.studentHistory => const StudentHistoryPage(),
