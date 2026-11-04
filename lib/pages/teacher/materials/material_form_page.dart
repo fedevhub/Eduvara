@@ -5,7 +5,11 @@ import '../../../components/ui/kit.dart';
 import '../../../repositories/activity_repository.dart';
 
 /// Tambah / Edit materi (guru).
-/// Argumen: null = tambah, String (id materi) atau Map {'id': ..., 'course_id': ...} = edit.
+/// Course tidak dipilih di form ini, tapi dibawa dari halaman sebelumnya.
+/// Argumen yang dikenali:
+///   - String id course   → tambah materi untuk course tersebut
+///   - String id materi   → edit materi
+///   - Map {'id': id materi (opsional), 'course_id': id course}
 ///
 /// Isi materi disimpan sebagai teks Markdown:
 ///   **tebal**  *miring*  <u>garis bawah</u>  - bullet  1. nomor  [teks](url)  ![](url)
@@ -29,9 +33,13 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
   final _db = Supabase.instance.client;
   final _activityRepository = ActivityRepository();
 
-  List<Map<String, dynamic>> _courses = [];
+  static final _uuid = RegExp(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  );
+
   String? _courseId;
   String? _materialId;
+  String? _argString; // String dari halaman sebelumnya: id course atau id materi
 
   // File materi
   PlatformFile? _pickedFile;
@@ -51,8 +59,9 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
     if (_init) return;
     _init = true;
     final arg = ModalRoute.of(context)?.settings.arguments;
+    debugPrint('[TeacherMaterialForm] argumen diterima: $arg (${arg.runtimeType})');
     if (arg is String) {
-      _materialId = arg;
+      _argString = arg.trim();
     } else if (arg is Map) {
       _materialId = arg['id']?.toString();
       _courseId = arg['course_id']?.toString();
@@ -71,15 +80,6 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
 
   // ───────────────────────── DATA ─────────────────────────
 
-  /// Nama course: coba beberapa kemungkinan nama kolom.
-  String _courseName(Map<String, dynamic> c) {
-    for (final k in ['name', 'title', 'course_name', 'nama', 'nama_course']) {
-      final v = c[k];
-      if (v != null && v.toString().isNotEmpty) return v.toString();
-    }
-    return 'Course ${c['id']}';
-  }
-
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -89,17 +89,25 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
       final uid = _db.auth.currentUser?.id;
       if (uid == null) throw 'Sesi login tidak ditemukan.';
 
-      final rows = List<Map<String, dynamic>>.from(
-        await _db.from('courses').select(),
-      );
-      debugPrint('[TeacherMaterialForm] kolom courses: '
-          '${rows.isNotEmpty ? rows.first.keys.toList() : 'kosong'}');
-
-      const teacherKeys = ['teacher_id', 'guru_id', 'user_id', 'created_by'];
-      _courses = rows.where((c) {
-        final k = teacherKeys.firstWhere(c.containsKey, orElse: () => '');
-        return k.isEmpty || '${c[k]}' == uid;
-      }).toList();
+      // Argumen String: id course (tambah materi) atau id materi (edit)
+      final a = _argString;
+      if (a != null && a.isNotEmpty) {
+        if (_uuid.hasMatch(a)) {
+          final c = await _db
+              .from('courses')
+              .select('id')
+              .eq('id', a)
+              .maybeSingle();
+          if (c != null) {
+            _courseId = a;
+          } else {
+            _materialId = a;
+          }
+        } else {
+          _materialId = a;
+        }
+        _argString = null;
+      }
 
       if (_materialId != null) {
         final m = await _db
@@ -111,15 +119,11 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
         desc.text = (m['description'] ?? '').toString();
         body.text = (m['content'] ?? '').toString();
         link.text = (m['video_url'] ?? '').toString();
-        _courseId = m['course_id']?.toString();
+        _courseId = m['course_id']?.toString() ?? _courseId;
         _existingFileUrl = m['file_url']?.toString();
         _existingFileName = m['file_name']?.toString();
       }
 
-      if (_courseId != null &&
-          !_courses.any((c) => '${c['id']}' == _courseId)) {
-        _courseId = null;
-      }
     } catch (e) {
       debugPrint('[TeacherMaterialForm] Gagal memuat data: $e');
       _loadError = 'Gagal memuat data: $e';
@@ -165,7 +169,9 @@ final res = await FilePicker.pickFiles(
     if (_saving) return;
     final materialName = title.text.trim();
 
-    if (_courseId == null) return _snack('Course wajib dipilih.');
+    if (_courseId == null) {
+      return _snack('Course tidak diketahui. Buka halaman ini dari detail course.');
+    }
     if (materialName.isEmpty) return _snack('Judul materi wajib diisi.');
     if (desc.text.trim().isEmpty) return _snack('Deskripsi materi wajib diisi.');
     if (body.text.trim().isEmpty) return _snack('Isi materi wajib diisi.');
@@ -333,13 +339,6 @@ final res = await FilePicker.pickFiles(
 
   // ───────────────────────── UI ─────────────────────────
 
-  String? get _selectedCourseName {
-    for (final c in _courses) {
-      if ('${c['id']}' == _courseId) return _courseName(c);
-    }
-    return null;
-  }
-
   String? get _currentFileName => _pickedFile?.name ?? _existingFileName;
 
   @override
@@ -381,17 +380,6 @@ final res = await FilePicker.pickFiles(
     final fileName = _currentFileName;
     return FormCard(
       children: [
-        const FieldLabel('Course', required: true),
-        EduSelect(
-          value: _selectedCourseName,
-          items: _courses.map(_courseName).toList(),
-          onChanged: (v) {
-            final match = _courses.where((c) => _courseName(c) == v);
-            setState(
-              () => _courseId = match.isEmpty ? null : '${match.first['id']}',
-            );
-          },
-        ),
         const FieldLabel('Judul Materi', required: true),
         EduField(controller: title),
         const FieldLabel('Deskripsi Materi', required: true),

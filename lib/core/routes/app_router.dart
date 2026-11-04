@@ -38,6 +38,8 @@ import '../../pages/teacher/courses/teacher_course_page.dart';
 import '../../pages/teacher/history/history_page.dart';
 import '../../pages/teacher/materials/material_form_page.dart';
 import '../../pages/teacher/profile/teacher_profile_page.dart';
+import '../../pages/teacher/quizzez/question_form_page.dart';
+import '../../pages/teacher/quizzez/quiz_form_page.dart';
 import '../../pages/teacher/students/student_list_page.dart';
 import '../../pages/teacher/teacher_dashboard_page.dart';
 
@@ -79,6 +81,8 @@ class AppRouter {
     RouteNames.teacherCourses => const TeacherCoursesPage(),
     RouteNames.teacherCourseDetail => const TeacherCourseDetailPage(),
     RouteNames.teacherMaterialForm => const TeacherMaterialFormPage(),
+    RouteNames.teacherQuizForm => const TeacherQuizFormPage(),
+    RouteNames.teacherQuestionForm => const TeacherQuestionFormPage(),
     RouteNames.teacherStudents => const TeacherStudentListPage(),
     RouteNames.teacherHistory => const TeacherHistoryPage(),
     RouteNames.teacherProfile => const TeacherProfilePage(),
