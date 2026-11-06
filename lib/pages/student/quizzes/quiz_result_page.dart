@@ -5,19 +5,22 @@ import '../../../core/routes/route_names.dart';
 
 class _ResultData {
   final int score;
+  final int totalPoints;
   final int correct;
   final int wrong;
   final int passingScore;
   final dynamic courseId;
   const _ResultData(
     this.score,
+    this.totalPoints,
     this.correct,
     this.wrong,
     this.passingScore,
     this.courseId,
   );
 
-  bool get passed => score >= passingScore;
+  bool get passed =>
+      totalPoints > 0 && score * 100 / totalPoints >= passingScore;
 }
 
 class QuizResultPage extends StatefulWidget {
@@ -49,36 +52,32 @@ class _QuizResultPageState extends State<QuizResultPage> {
     if (_attemptId != null) _result = _load();
   }
 
-  bool _isMissingTableError(PostgrestException e) =>
-      e.code == 'PGRST205' ||
-      e.message.toLowerCase().contains('could not find the table');
-
   Future<_ResultData> _load() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-    try {
-      final row = await _db
-          .from('quiz_attempts')
-          .select(
-            'score, correct_count, wrong_count, quizzes(course_id, passing_score)',
-          )
-          .eq('id', _attemptId!)
-          .eq('user_id', uid)
-          .single();
+    final row = await _db
+        .from('quiz_attempts')
+        .select(
+          'score, total_points, correct_count, wrong_count, '
+          'quizzes(course_id, passing_score)',
+        )
+        .eq('id', _attemptId!)
+        .eq('user_id', uid)
+        .single();
 
-      final quiz = row['quizzes'] as Map?;
-      return _ResultData(
-        (row['score'] as num?)?.round() ?? 0,
-        (row['correct_count'] as num?)?.toInt() ?? 0,
-        (row['wrong_count'] as num?)?.toInt() ?? 0,
-        (quiz?['passing_score'] as num?)?.toInt() ?? 80,
-        quiz?['course_id'],
-      );
-    } on PostgrestException catch (e) {
-      if (!_isMissingTableError(e)) rethrow;
-      return const _ResultData(0, 0, 0, 80, null);
+    final quiz = row['quizzes'] as Map?;
+    if (quiz == null) {
+      throw const FormatException('Course quiz tidak ditemukan.');
     }
+    return _ResultData(
+      (row['score'] as num?)?.round() ?? 0,
+      (row['total_points'] as num?)?.round() ?? 0,
+      (row['correct_count'] as num?)?.toInt() ?? 0,
+      (row['wrong_count'] as num?)?.toInt() ?? 0,
+      (quiz['passing_score'] as num?)?.toInt() ?? 80,
+      quiz['course_id'],
+    );
   }
 
   void _reload() {
@@ -143,9 +142,9 @@ class _QuizResultPageState extends State<QuizResultPage> {
                       color: Colors.white,
                     ),
                   ),
-                  const Text(
-                    'Dari 100 Poin',
-                    style: TextStyle(fontSize: 7, color: Colors.white),
+                  Text(
+                    'Dari ${d.totalPoints} Poin',
+                    style: const TextStyle(fontSize: 7, color: Colors.white),
                   ),
                 ],
               ),

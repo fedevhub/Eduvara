@@ -32,7 +32,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
   int _totalStudents = 0;
   double? _avgCompletion; // 0..1, null = belum ada data
   double? _avgQuizScore; // null = belum ada data
-  bool _hasUnread = false;
+  int _unreadNotifications = 0;
   List<_CourseItem> _activeCourses = [];
 
   @override
@@ -136,11 +136,16 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         if (quizIds.isNotEmpty) {
           final attempts = await _db
               .from('quiz_attempts')
-              .select('score')
+              .select('score, total_points')
               .inFilter('quiz_id', quizIds)
               .eq('completed', true);
           final scores = List<Map<String, dynamic>>.from(attempts)
-              .map((attempt) => (attempt['score'] as num?)?.toDouble())
+              .map((attempt) {
+                final score = (attempt['score'] as num?)?.toDouble();
+                final total = (attempt['total_points'] as num?)?.toDouble();
+                if (score == null || total == null || total <= 0) return null;
+                return score * 100 / total;
+              })
               .whereType<double>()
               .toList();
           if (scores.isNotEmpty) {
@@ -154,9 +159,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
           .from('notifications')
           .select('id')
           .eq('user_id', user.id)
-          .eq('is_read', false)
-          .limit(1);
-      final unread = notificationRows.isNotEmpty;
+          .eq('is_read', false);
 
       final active = courses.where((c) => c['status'] == 'active').map((c) {
         final id = c['id'].toString();
@@ -179,7 +182,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         _totalStudents = allStudents.length;
         _avgCompletion = avgCompletion;
         _avgQuizScore = avgQuiz;
-        _hasUnread = unread;
+        _unreadNotifications = notificationRows.length;
         _activeCourses = active;
         _loading = false;
       });
@@ -264,16 +267,28 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
           clipBehavior: Clip.none,
           children: [
             const Icon(Icons.notifications_none, size: 24),
-            if (_hasUnread)
+            if (_unreadNotifications > 0)
               Positioned(
-                right: 1,
-                top: 0,
+                right: -7,
+                top: -7,
                 child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
+                  constraints: const BoxConstraints(
+                    minWidth: 15,
+                    minHeight: 15,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  decoration: BoxDecoration(
                     color: Ui.red,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _unreadNotifications > 99 ? '99+' : '$_unreadNotifications',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ),

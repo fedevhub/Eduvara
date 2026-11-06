@@ -30,7 +30,9 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
     try {
       final data = await _db
           .from('quiz_attempts')
-          .select('id, score, created_at, quizzes(title, courses(title))')
+          .select(
+            'id, score, total_points, created_at, quizzes(title, courses(title))',
+          )
           .eq('user_id', uid)
           .eq('completed', true)
           .order('created_at', ascending: false);
@@ -73,7 +75,11 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
     final course = quiz?['courses'] as Map?;
     final courseTitle = course?['title']?.toString() ?? '-';
     final quizTitle = quiz?['title']?.toString() ?? '-';
-    final score = row['score']?.toString() ?? '-';
+    final score = row['score'];
+    final totalPoints = row['total_points'];
+    final scoreText = score is num && totalPoints is num
+        ? '${score.round()}/${totalPoints.round()}'
+        : score?.toString() ?? '-';
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -112,7 +118,7 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
               ),
               child: FittedBox(
                 child: Text(
-                  score,
+                  scoreText,
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,
