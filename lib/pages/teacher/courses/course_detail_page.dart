@@ -14,9 +14,6 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   // Kandidat nama tabel/kolom. Setelah tahu yang benar dari log, sisakan satu.
   static const _tCourses = 'courses';
   static const _tEnrollments = 'enrollments';
-  static const _materialTables = ['materials'];
-  static const _quizTables = ['quizzes'];
-  static const _courseCols = ['course_id'];
 
   final _db = Supabase.instance.client;
 
@@ -30,8 +27,6 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   String _teacherName = '-';
   String _description = '';
   int _percent = 0;
-
-  String? _matTable, _matCol, _quizTable, _quizCol;
 
   List<Map<String, dynamic>> _materials = [];
   List<Map<String, dynamic>> _quizzes = [];
@@ -73,37 +68,6 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     ];
     String two(int n) => n.toString().padLeft(2, '0');
     return '${days[d.weekday - 1]}, ${two(d.day)}-${two(d.month)}-${d.year}';
-  }
-
-  Future<({String table, String col, List<Map<String, dynamic>> rows})?>
-  _findRows(List<String> tables, String? knownT, String? knownC) async {
-    final ts = knownT != null ? [knownT] : tables;
-    final cs = knownC != null ? [knownC] : _courseCols;
-    for (final t in ts) {
-      for (final c in cs) {
-        try {
-          final rows = await _db.from(t).select().eq(c, _courseId!);
-          debugPrint('Detail: pakai $t.$c');
-          return (
-            table: t,
-            col: c,
-            rows: List<Map<String, dynamic>>.from(rows),
-          );
-        } on PostgrestException catch (e) {
-          if (e.code == 'PGRST205') break; // tabel tidak ada
-        } catch (_) {}
-      }
-    }
-    debugPrint('Detail: tabel/kolom tidak ketemu untuk $tables');
-    return null;
-  }
-
-  void _sortNewest(List<Map<String, dynamic>> rows) {
-    rows.sort((a, b) {
-      final x = a['created_at']?.toString() ?? '';
-      final y = b['created_at']?.toString() ?? '';
-      return y.compareTo(x);
-    });
   }
 
   // ---------- load ----------
@@ -166,18 +130,20 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 .round();
       }
 
-      final mat = await _findRows(_materialTables, _matTable, _matCol);
-      final quiz = await _findRows(_quizTables, _quizTable, _quizCol);
-      if (mat != null) {
-        _matTable = mat.table;
-        _matCol = mat.col;
-        _sortNewest(mat.rows);
-      }
-      if (quiz != null) {
-        _quizTable = quiz.table;
-        _quizCol = quiz.col;
-        _sortNewest(quiz.rows);
-      }
+      final materialRows = List<Map<String, dynamic>>.from(
+        await _db
+            .from('materials')
+            .select()
+            .eq('course_id', _courseId!)
+            .order('order_no'),
+      );
+      final quizRows = List<Map<String, dynamic>>.from(
+        await _db
+            .from('quizzes')
+            .select()
+            .eq('course_id', _courseId!)
+            .order('order_no'),
+      );
 
       if (!mounted) return;
       setState(() {
@@ -185,8 +151,8 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
         _description = (course['description'] ?? '').toString();
         _teacherName = teacher;
         _percent = percent.clamp(0, 100);
-        _materials = mat?.rows ?? [];
-        _quizzes = quiz?.rows ?? [];
+        _materials = materialRows;
+        _quizzes = quizRows;
         _loading = false;
       });
     } catch (e) {
@@ -410,6 +376,16 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 ),
               ),
               _iconBtn(
+                Icons.visibility_outlined,
+                Ui.blueSoft,
+                Ui.blue,
+                () => Navigator.pushNamed(
+                  context,
+                  RouteNames.teacherMaterialDetail,
+                  arguments: {'id': m['id']},
+                ),
+              ),
+              _iconBtn(
                 Icons.edit_outlined,
                 Ui.blueSoft,
                 Ui.blue,
@@ -419,7 +395,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.delete_outline,
                 Ui.redSoft,
                 Ui.red,
-                () => _delete(what: 'Materi', table: _matTable, id: m['id']),
+                () => _delete(what: 'Materi', table: 'materials', id: m['id']),
               ),
             ],
           ),
@@ -462,6 +438,16 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 ),
               ),
               _iconBtn(
+                Icons.visibility_outlined,
+                Ui.blueSoft,
+                Ui.blue,
+                () => Navigator.pushNamed(
+                  context,
+                  RouteNames.teacherQuizDetail,
+                  arguments: {'id': q['id']},
+                ),
+              ),
+              _iconBtn(
                 Icons.edit_outlined,
                 Ui.blueSoft,
                 Ui.blue,
@@ -478,7 +464,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.delete_outline,
                 Ui.redSoft,
                 Ui.red,
-                () => _delete(what: 'Quiz', table: _quizTable, id: q['id']),
+                () => _delete(what: 'Quiz', table: 'quizzes', id: q['id']),
               ),
             ],
           ),

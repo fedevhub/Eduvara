@@ -1,5 +1,5 @@
 class History {
-  final int id;
+  final String id;
   final String activity;
   final String date;
   final String status;

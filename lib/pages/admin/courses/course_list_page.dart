@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
-import '../../../core/routes/route_names.dart';
+import 'course_form_page.dart';
 
 /// Nama tabel Supabase (ubah di sini kalau berbeda)
 const _tCourse = 'courses';
@@ -69,7 +69,7 @@ class _CourseListPageState extends State<CourseListPage> {
   }
 
   int _percent(Map<String, dynamic> c) {
-    final raw = _pick(c, ['percent', 'progress', 'completion_rate']);
+    final raw = _pick(c, ['completion_rate', 'percent', 'progress']);
     final v = raw is num ? raw.round() : int.tryParse('$raw') ?? 0;
     return v.clamp(0, 100).toInt();
   }
@@ -94,25 +94,113 @@ class _CourseListPageState extends State<CourseListPage> {
     }
 
     try {
-      final courseData = await _db.from(_tCourse).select('*');
-      final courses = List<Map<String, dynamic>>.from(courseData as List);
-      final enrollmentData = await _db.from('enrollments').select('course_id');
+      final results = await Future.wait([
+        _db.from(_tCourse).select('*'),
+        _db.from('enrollments').select('course_id, student_id'),
+        _db.from('materials').select('id, course_id'),
+        _db.from('material_progress').select('user_id, material_id, completed'),
+        _db.from('quizzes').select('id, course_id, status'),
+        _db.from('quiz_attempts').select('user_id, quiz_id, completed'),
+      ]);
+      final courses = List<Map<String, dynamic>>.from(results[0] as List);
+      final enrollments = List<Map<String, dynamic>>.from(results[1] as List);
+      final materials = List<Map<String, dynamic>>.from(results[2] as List);
+      final materialProgress = List<Map<String, dynamic>>.from(
+        results[3] as List,
+      );
+      final quizzes = List<Map<String, dynamic>>.from(results[4] as List);
+      final quizAttempts = List<Map<String, dynamic>>.from(results[5] as List);
+
       final enrollmentCounts = <String, int>{};
-      for (final enrollment in List<Map<String, dynamic>>.from(
-        enrollmentData,
-      )) {
+      final studentsByCourse = <String, Set<String>>{};
+      for (final enrollment in enrollments) {
         final courseId = enrollment['course_id']?.toString();
-        if (courseId != null) {
-          enrollmentCounts.update(
-            courseId,
-            (count) => count + 1,
-            ifAbsent: () => 1,
-          );
-        }
+        final studentId = enrollment['student_id']?.toString();
+        if (courseId == null || studentId == null) continue;
+        final students = studentsByCourse.putIfAbsent(
+          courseId,
+          () => <String>{},
+        );
+        students.add(studentId);
       }
+      for (final entry in studentsByCourse.entries) {
+        enrollmentCounts[entry.key] = entry.value.length;
+      }
+
+      final courseByMaterial = <String, String>{};
+      final materialsByCourse = <String, Set<String>>{};
+      for (final material in materials) {
+        final courseId = material['course_id']?.toString();
+        final materialId = material['id']?.toString();
+        if (courseId == null || materialId == null) continue;
+        courseByMaterial[materialId] = courseId;
+        materialsByCourse
+            .putIfAbsent(courseId, () => <String>{})
+            .add(materialId);
+      }
+
+      final courseByQuiz = <String, String>{};
+      final quizzesByCourse = <String, Set<String>>{};
+      for (final quiz in quizzes) {
+        if (quiz['status'] != 'published') continue;
+        final courseId = quiz['course_id']?.toString();
+        final quizId = quiz['id']?.toString();
+        if (courseId == null || quizId == null) continue;
+        courseByQuiz[quizId] = courseId;
+        quizzesByCourse.putIfAbsent(courseId, () => <String>{}).add(quizId);
+      }
+
+      final completedAssignmentsByCourse = <String, Set<String>>{};
+      for (final progress in materialProgress) {
+        if (progress['completed'] != true) continue;
+        final materialId = progress['material_id']?.toString();
+        final studentId = progress['user_id']?.toString();
+        final courseId = materialId == null
+            ? null
+            : courseByMaterial[materialId];
+        if (courseId == null ||
+            studentId == null ||
+            studentsByCourse[courseId]?.contains(studentId) != true) {
+          continue;
+        }
+        completedAssignmentsByCourse
+            .putIfAbsent(courseId, () => <String>{})
+            .add('material:$materialId:$studentId');
+      }
+      for (final attempt in quizAttempts) {
+        if (attempt['completed'] != true) continue;
+        final quizId = attempt['quiz_id']?.toString();
+        final studentId = attempt['user_id']?.toString();
+        final courseId = quizId == null ? null : courseByQuiz[quizId];
+        if (courseId == null ||
+            studentId == null ||
+            studentsByCourse[courseId]?.contains(studentId) != true) {
+          continue;
+        }
+        completedAssignmentsByCourse
+            .putIfAbsent(courseId, () => <String>{})
+            .add('quiz:$quizId:$studentId');
+      }
+
       for (final course in courses) {
-        course['student_count'] =
-            enrollmentCounts[course['id']?.toString()] ?? 0;
+        final courseId = course['id']?.toString();
+        final studentCount = courseId == null
+            ? 0
+            : enrollmentCounts[courseId] ?? 0;
+        final taskCount = courseId == null
+            ? 0
+            : (materialsByCourse[courseId]?.length ?? 0) +
+                  (quizzesByCourse[courseId]?.length ?? 0);
+        final totalAssignments = studentCount * taskCount;
+        final completedAssignments =
+            completedAssignmentsByCourse[courseId]?.length ?? 0;
+        course['student_count'] = studentCount;
+        course['completion_rate'] = totalAssignments == 0
+            ? 0
+            : (completedAssignments / totalAssignments * 100).round().clamp(
+                0,
+                100,
+              );
       }
 
       // Nama guru (opsional, hanya kalau tabel profiles bisa dibaca)
@@ -186,10 +274,22 @@ class _CourseListPageState extends State<CourseListPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  /// Buka page lain, lalu muat ulang data saat kembali.
-  Future<void> _go(String route, {Object? arguments}) async {
-    await Navigator.pushNamed(context, route, arguments: arguments);
-    if (mounted) _load();
+  Future<void> _openCourseForm({Map<String, dynamic>? course}) async {
+    final size = MediaQuery.sizeOf(context);
+    final changed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      routeSettings: RouteSettings(arguments: course),
+      builder: (context) => Dialog(
+        insetPadding: const EdgeInsets.all(20),
+        child: SizedBox(
+          width: size.width > 800 ? 760 : size.width - 40,
+          height: size.height * 0.9,
+          child: const AdminCourseFormPage(),
+        ),
+      ),
+    );
+    if (changed == true && mounted) _load();
   }
 
   // ---------------------------------------------------------------------------
@@ -206,10 +306,7 @@ class _CourseListPageState extends State<CourseListPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 6),
-          PageTitle(
-            'Manajemen Course',
-            onAdd: () => _go(RouteNames.adminCourseForm),
-          ),
+          PageTitle('Manajemen Course', onAdd: () => _openCourseForm()),
           const SizedBox(height: 14),
           SearchBox(
             hint: 'Cari Course',
@@ -246,7 +343,6 @@ class _CourseListPageState extends State<CourseListPage> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: EduCard(
                   padding: const EdgeInsets.all(12),
-                  onTap: () => _go(RouteNames.adminCourseDetail, arguments: c),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -260,6 +356,13 @@ class _CourseListPageState extends State<CourseListPage> {
                                 fontWeight: FontWeight.w800,
                               ),
                             ),
+                          ),
+                          IconButton(
+                            tooltip: 'Edit course',
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => _openCourseForm(course: c),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            color: Ui.blue,
                           ),
                           Pill(
                             _active(c) ? 'Aktif' : 'Nonaktif',
@@ -288,20 +391,7 @@ class _CourseListPageState extends State<CourseListPage> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: SoftBtn.edit(
-                              onTap: () =>
-                                  _go(RouteNames.adminCourseForm, arguments: c),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: SoftBtn.delete(onTap: () => _delete(c)),
-                          ),
-                        ],
-                      ),
+                      SoftBtn.delete(onTap: () => _delete(c)),
                     ],
                   ),
                 ),

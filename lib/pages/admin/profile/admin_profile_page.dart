@@ -11,31 +11,92 @@ class AdminProfilePage extends StatefulWidget {
 }
 
 class _AdminProfilePageState extends State<AdminProfilePage> {
-  static const _namaSekolah = 'SMK Negeri 8 Malang';
-  static const _bulanMulaiTahunAjaran = 7;
-
   final _db = Supabase.instance.client;
-
-  late String _tahunAjaran;
-  late Stream<int> _classCountStream;
+  late Future<Map<String, dynamic>> _settings;
 
   @override
   void initState() {
     super.initState();
-    _bind();
+    _settings = _loadSettings();
   }
 
-  static String _hitungTahunAjaran(DateTime now) {
-    final mulai = now.month >= _bulanMulaiTahunAjaran ? now.year : now.year - 1;
-    return '$mulai/${mulai + 1}';
-  }
+  Future<Map<String, dynamic>> _loadSettings() async =>
+      Map<String, dynamic>.from(
+        await _db
+            .from('school_settings')
+            .select('school_name, academic_year, class_count')
+            .eq('id', 1)
+            .single(),
+      );
 
-  void _bind() {
-    _tahunAjaran = _hitungTahunAjaran(DateTime.now());
-    _classCountStream = _db
-        .from('classes')
-        .stream(primaryKey: ['id'])
-        .map((rows) => rows.length);
+  Future<void> _editSetting({
+    required String title,
+    required String column,
+    required String currentValue,
+    required bool numeric,
+  }) async {
+    final controller = TextEditingController(text: currentValue);
+    final formKey = GlobalKey<FormState>();
+    final value = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit $title'),
+        content: Form(
+          key: formKey,
+          child: TextFormField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: numeric ? TextInputType.number : TextInputType.text,
+            decoration: InputDecoration(labelText: title),
+            validator: (value) {
+              final text = value?.trim() ?? '';
+              if (text.isEmpty) return '$title wajib diisi.';
+              if (numeric && int.tryParse(text) == null) {
+                return 'Masukkan angka yang valid.';
+              }
+              if (column == 'academic_year' &&
+                  !RegExp(r'^\d{4}/\d{4}$').hasMatch(text)) {
+                return 'Gunakan format tahun ajaran, contoh 2026/2027.';
+              }
+              if (numeric && int.parse(text) < 0) {
+                return 'Nilai tidak boleh negatif.';
+              }
+              return null;
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                Navigator.pop(context, controller.text.trim());
+              }
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (value == null || !mounted) return;
+
+    try {
+      await _db
+          .from('school_settings')
+          .update({column: numeric ? int.parse(value) : value})
+          .eq('id', 1);
+      if (!mounted) return;
+      setState(() => _settings = _loadSettings());
+    } on PostgrestException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan $title: ${error.message}')),
+      );
+    }
   }
 
   Future<void> _logout() async {
@@ -45,20 +106,44 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
       message: 'Kamu akan keluar dari Eduvara.',
       primary: 'Ya, Keluar',
     );
-    if (!ok) return;
+    if (!ok || !mounted) return;
 
     try {
       await _db.auth.signOut();
-    } catch (_) {
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal keluar: ${error.message}')));
+      return;
     }
 
     if (!mounted) return;
     Navigator.pushNamedAndRemoveUntil(
       context,
       RouteNames.login,
-      (r) => false,
+      (route) => false,
     );
   }
+
+  Widget _settingRow(
+    String title,
+    String value, {
+    required String column,
+    required bool numeric,
+    required bool last,
+    String? editValue,
+  }) => _Row(
+    title,
+    value,
+    last: last,
+    onEdit: () => _editSetting(
+      title: title,
+      column: column,
+      currentValue: editValue ?? value,
+      numeric: numeric,
+    ),
+  );
 
   @override
   Widget build(BuildContext context) => EduScaffold(
@@ -78,46 +163,65 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
           style: TextStyle(fontSize: 8, color: Ui.muted),
         ),
         const SizedBox(height: 6),
-        EduCard(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          child: Column(
-            children: [
-              const _Row('Nama Sekolah', _namaSekolah),
-              _Row('Tahun Ajaran', _tahunAjaran),
-              StreamBuilder<int>(
-                stream: _classCountStream,
-                builder: (context, snap) {
-                  final text = snap.hasError
-                      ? 'Gagal memuat'
-                      : snap.hasData
-                      ? '${snap.data} Kelas'
-                      : '...';
-                  if (snap.hasError) {
-                    debugPrint('classes error: ${snap.error}');
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _Row(
-                        'Jumlah Kelas',
-                        text,
-                        last: true,
-                        onTap: snap.hasError ? () => setState(_bind) : null,
-                      ),
-                      if (snap.hasError)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            '${snap.error}',
-                            style: const TextStyle(fontSize: 8, color: Ui.red),
-                          ),
-                        ),
-                    ],
-                  );
-                },
+        FutureBuilder<Map<String, dynamic>>(
+          future: _settings,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const EduCard(
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snapshot.hasError || snapshot.data == null) {
+              return EduCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Pengaturan sekolah belum dapat dimuat.'),
+                    Text(
+                      '${snapshot.error}',
+                      style: const TextStyle(fontSize: 9, color: Ui.red),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _settings = _loadSettings()),
+                      child: const Text('Coba lagi'),
+                    ),
+                  ],
+                ),
+              );
+            }
+
+            final settings = snapshot.data!;
+            return EduCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Column(
+                children: [
+                  _settingRow(
+                    'Nama Sekolah',
+                    settings['school_name'].toString(),
+                    column: 'school_name',
+                    numeric: false,
+                    last: false,
+                  ),
+                  _settingRow(
+                    'Tahun Ajaran',
+                    settings['academic_year'].toString(),
+                    column: 'academic_year',
+                    numeric: false,
+                    last: false,
+                  ),
+                  _settingRow(
+                    'Jumlah Kelas',
+                    '${settings['class_count']} Kelas',
+                    column: 'class_count',
+                    numeric: true,
+                    last: true,
+                    editValue: settings['class_count'].toString(),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          },
         ),
         const Spacer(),
         GestureDetector(
@@ -155,29 +259,33 @@ class _AdminProfilePageState extends State<AdminProfilePage> {
 }
 
 class _Row extends StatelessWidget {
-  final String k;
-  final String v;
+  final String title;
+  final String value;
   final bool last;
-  final VoidCallback? onTap;
-  const _Row(this.k, this.v, {this.last = false, this.onTap});
+  final VoidCallback onEdit;
+
+  const _Row(this.title, this.value, {required this.onEdit, this.last = false});
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    behavior: HitTestBehavior.opaque,
-    child: Container(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      decoration: BoxDecoration(
-        border: last
-            ? null
-            : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
-      ),
-      child: Row(
-        children: [
-          Expanded(child: Text(k, style: const TextStyle(fontSize: 9))),
-          Text(v, style: const TextStyle(fontSize: 9)),
-        ],
-      ),
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    decoration: BoxDecoration(
+      border: last
+          ? null
+          : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
+    ),
+    child: Row(
+      children: [
+        Expanded(child: Text(title, style: const TextStyle(fontSize: 9))),
+        Text(value, style: const TextStyle(fontSize: 9)),
+        IconButton(
+          tooltip: 'Edit $title',
+          visualDensity: VisualDensity.compact,
+          onPressed: onEdit,
+          icon: const Icon(Icons.edit_outlined, size: 15),
+          color: Ui.blue,
+        ),
+      ],
     ),
   );
 }

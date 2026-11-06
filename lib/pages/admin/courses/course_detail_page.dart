@@ -108,7 +108,7 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
     try {
       // 1. Mengambil data course dari Supabase.
       final courseData = await _supabase
-          .from('course')
+          .from('courses')
           .select()
           .eq('id', id)
           .maybeSingle();
@@ -143,8 +143,8 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
         final row = Map<String, dynamic>.from(item);
 
         return Materi(
-          id: int.tryParse(row['id'].toString()) ?? 0,
-          courseId: int.tryParse(id) ?? 0,
+          id: row['id'].toString(),
+          courseId: id,
           title: (row['title'] ?? '').toString(),
           content: (row['content'] ?? '').toString(),
         );
