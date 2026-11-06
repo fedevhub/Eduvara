@@ -1,5 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/formatters.dart';
 
 class Ui {
@@ -903,12 +904,51 @@ class _NavItem {
   const _NavItem(this.icon, this.label, this.route);
 }
 
-class EduBottomNav extends StatelessWidget {
+class EduBottomNav extends StatefulWidget {
   final String role;
   final int current;
   const EduBottomNav({super.key, required this.role, required this.current});
 
-  List<_NavItem> get _items => switch (role) {
+  @override
+  State<EduBottomNav> createState() => _EduBottomNavState();
+}
+
+class _EduBottomNavState extends State<EduBottomNav> {
+  late Future<int> _unreadNotifications;
+
+  @override
+  void initState() {
+    super.initState();
+    _unreadNotifications = _loadUnreadNotifications();
+  }
+
+  @override
+  void didUpdateWidget(covariant EduBottomNav oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.role != widget.role) {
+      _unreadNotifications = _loadUnreadNotifications();
+    }
+  }
+
+  Future<int> _loadUnreadNotifications() async {
+    if (widget.role != 'student') return 0;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return 0;
+    try {
+      final rows = await Supabase.instance.client
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('is_read', false);
+      return rows.length;
+    } catch (error, stackTrace) {
+      debugPrint('[EduBottomNav] Gagal memuat jumlah notifikasi: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  List<_NavItem> get _items => switch (widget.role) {
     'admin' => const [
       _NavItem(Icons.home_outlined, 'Home', '/admin/dashboard'),
       _NavItem(Icons.people_outline, 'Pengguna', '/admin/users'),
@@ -933,8 +973,54 @@ class EduBottomNav extends StatelessWidget {
       ),
       _NavItem(Icons.person_outline, 'Profile', '/student/profile'),
     ],
-    _ => throw ArgumentError.value(role, 'role', 'Unknown navigation role'),
+    _ => throw ArgumentError.value(
+      widget.role,
+      'role',
+      'Unknown navigation role',
+    ),
   };
+
+  Widget _navIcon(int index, _NavItem item) {
+    final icon = Icon(item.icon, size: 20, color: Ui.navy);
+    if (widget.role != 'student' || index != 3 || widget.current == 3) {
+      return icon;
+    }
+    return FutureBuilder<int>(
+      future: _unreadNotifications,
+      builder: (context, snapshot) {
+        final count = snapshot.data ?? 0;
+        if (snapshot.hasError) return icon;
+        if (count == 0) return icon;
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            icon,
+            Positioned(
+              right: -9,
+              top: -7,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                decoration: const BoxDecoration(
+                  color: Ui.red,
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  count > 99 ? '99+' : '$count',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -962,7 +1048,7 @@ class EduBottomNav extends StatelessWidget {
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
-                    if (i == current) return;
+                    if (i == widget.current) return;
                     Navigator.pushReplacementNamed(context, items[i].route);
                   },
                   child: Container(
@@ -971,13 +1057,15 @@ class EduBottomNav extends StatelessWidget {
                       vertical: 5,
                     ),
                     decoration: BoxDecoration(
-                      color: i == current ? Ui.navGreen : Colors.transparent,
+                      color: i == widget.current
+                          ? Ui.navGreen
+                          : Colors.transparent,
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(items[i].icon, size: 20, color: Ui.navy),
+                        _navIcon(i, items[i]),
                         const SizedBox(height: 2),
                         Text(
                           items[i].label,

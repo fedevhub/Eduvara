@@ -34,9 +34,11 @@ import '../../pages/student/quizzes/quiz_result_page.dart';
 import '../../pages/teacher/courses/course_detail_page.dart';
 import '../../pages/teacher/courses/teacher_course_page.dart';
 import '../../pages/teacher/history/history_page.dart';
+import '../../pages/teacher/materials/material_detail_page.dart';
 import '../../pages/teacher/materials/material_form_page.dart';
 import '../../pages/teacher/notifications/notification_page.dart';
 import '../../pages/teacher/profile/teacher_profile_page.dart';
+import '../../pages/teacher/quizzez/quiz_detail_page.dart';
 import '../../pages/teacher/quizzez/question_form_page.dart';
 import '../../pages/teacher/quizzez/quiz_form_page.dart';
 import '../../pages/teacher/students/student_detail_page.dart';
@@ -80,7 +82,9 @@ class AppRouter {
     RouteNames.teacherDashboard => const TeacherDashboardPage(),
     RouteNames.teacherCourses => const TeacherCoursesPage(),
     RouteNames.teacherCourseDetail => const TeacherCourseDetailPage(),
+    RouteNames.teacherMaterialDetail => const TeacherMaterialDetailPage(),
     RouteNames.teacherMaterialForm => const TeacherMaterialFormPage(),
+    RouteNames.teacherQuizDetail => const TeacherQuizDetailPage(),
     RouteNames.teacherQuizForm => const TeacherQuizFormPage(),
     RouteNames.teacherQuestionForm => const TeacherQuestionFormPage(),
     RouteNames.teacherStudents => const TeacherStudentListPage(),

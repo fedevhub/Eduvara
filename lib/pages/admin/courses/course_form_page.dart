@@ -190,7 +190,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   Future<void> _loadCourse() async {
     final data = await _db
-        .from('course')
+        .from('courses')
         .select()
         .eq('id', _editingCourseId!)
         .single();

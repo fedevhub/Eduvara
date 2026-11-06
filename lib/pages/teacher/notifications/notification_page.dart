@@ -40,7 +40,11 @@ class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
       await _db
           .from('notifications')
           .update({'is_read': true})
+          .eq('user_id', userId)
           .inFilter('id', unreadIds);
+      for (final item in items) {
+        item['is_read'] = true;
+      }
     }
     return items;
   }

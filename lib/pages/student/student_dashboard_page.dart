@@ -107,7 +107,22 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       courseByMaterial[m['id'].toString()] = cid;
     }
 
-    // materi yang sudah diselesaikan siswa
+    final quizzes = List<Map<String, dynamic>>.from(
+      await _db
+          .from('quizzes')
+          .select('id, course_id')
+          .inFilter('course_id', courseIds)
+          .eq('status', 'published'),
+    );
+    final totalQuizzesByCourse = <String, int>{};
+    final courseByQuiz = <String, String>{};
+    for (final quiz in quizzes) {
+      final courseId = quiz['course_id'].toString();
+      totalQuizzesByCourse[courseId] =
+          (totalQuizzesByCourse[courseId] ?? 0) + 1;
+      courseByQuiz[quiz['id'].toString()] = courseId;
+    }
+
     final doneByCourse = <String, int>{};
     if (courseByMaterial.isNotEmpty) {
       final progress = await _db
@@ -121,20 +136,36 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
       }
     }
+    if (courseByQuiz.isNotEmpty) {
+      final attempts = await _db
+          .from('quiz_attempts')
+          .select('quiz_id')
+          .eq('user_id', user.id)
+          .eq('completed', true)
+          .inFilter('quiz_id', courseByQuiz.keys.toList());
+      final completedQuizIds = <String>{};
+      for (final attempt in attempts) {
+        final quizId = attempt['quiz_id'].toString();
+        if (!completedQuizIds.add(quizId)) continue;
+        final cid = courseByQuiz[quizId];
+        if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
+      }
+    }
 
     // status: terkunci jika course sebelumnya belum selesai
     final infos = <_CourseInfo>[];
     var previousDone = true;
     for (final c in courses) {
       final cid = c.id.toString();
-      final total = totalByCourse[cid] ?? 0;
+      final totalMaterials = totalByCourse[cid] ?? 0;
+      final total = totalMaterials + (totalQuizzesByCourse[cid] ?? 0);
       final done = doneByCourse[cid] ?? 0;
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
       final isDone = total > 0 && done >= total;
 
       final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
 
-      infos.add(_CourseInfo(c, st, total, pct));
+      infos.add(_CourseInfo(c, st, totalMaterials, pct));
       previousDone = isDone;
     }
     return _DashData(name, infos);

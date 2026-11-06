@@ -24,7 +24,7 @@ class AuthRepository {
 
   Future<AuthUserModel> login(String email, String password) async {
     final response = await _supabase.auth.signInWithPassword(
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       password: password,
     );
 

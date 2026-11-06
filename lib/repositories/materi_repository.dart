@@ -1,18 +1,26 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../models/materi_model.dart';
 
 class MateriRepository {
-  Future<List<Materi>> getByCourse(int courseId) async => [
-    Materi(
-      id: 1,
-      courseId: courseId,
-      title: 'Pengenalan Materi',
-      content: 'Materi pembelajaran Eduvara.',
-    ),
-    Materi(
-      id: 2,
-      courseId: courseId,
-      title: 'Materi Lanjutan',
-      content: 'Pembahasan dan contoh soal.',
-    ),
-  ];
+  final SupabaseClient _db = Supabase.instance.client;
+
+  Future<List<Materi>> getByCourse(String courseId) async {
+    final rows = await _db
+        .from('materials')
+        .select('id, course_id, title, content')
+        .eq('course_id', courseId)
+        .order('order_no');
+
+    return List<Map<String, dynamic>>.from(rows)
+        .map(
+          (row) => Materi(
+            id: row['id'].toString(),
+            courseId: row['course_id'].toString(),
+            title: (row['title'] ?? '').toString(),
+            content: (row['content'] ?? '').toString(),
+          ),
+        )
+        .toList();
+  }
 }
