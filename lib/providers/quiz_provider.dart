@@ -12,7 +12,7 @@ class QuizProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadQuestions(int id) async {
+  Future<void> loadQuestions(String id) async {
     questions = await repository.getQuestions(id);
     notifyListeners();
   }

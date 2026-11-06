@@ -248,7 +248,16 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                         ),
                         const SizedBox(height: 8),
                         ..._summaryParagraphs(
-                          _material!['summary']?.toString(),
+                          [
+                                _material!['summary'],
+                                _material!['content'],
+                                _material!['description'],
+                              ]
+                              .map((value) => value?.toString().trim() ?? '')
+                              .firstWhere(
+                                (value) => value.isNotEmpty,
+                                orElse: () => '',
+                              ),
                         ),
                       ],
                     ),

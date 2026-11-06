@@ -31,11 +31,26 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
     try {
       final data = await _db
           .from('notifications')
-          .select('id, title, message, created_at')
-          .or('user_id.eq.$uid,user_id.is.null')
+          .select('id, title, message, created_at, is_read')
+          .eq('user_id', uid)
           .order('created_at', ascending: false);
 
-      return List<Map<String, dynamic>>.from(data);
+      final rows = List<Map<String, dynamic>>.from(data);
+      final unreadIds = rows
+          .where((row) => row['is_read'] != true)
+          .map((row) => row['id'])
+          .toList();
+      if (unreadIds.isNotEmpty) {
+        await _db
+            .from('notifications')
+            .update({'is_read': true})
+            .eq('user_id', uid)
+            .inFilter('id', unreadIds);
+        for (final row in rows) {
+          row['is_read'] = true;
+        }
+      }
+      return rows;
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
       return const [];

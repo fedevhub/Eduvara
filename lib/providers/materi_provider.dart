@@ -5,7 +5,7 @@ import '../repositories/materi_repository.dart';
 class MateriProvider extends ChangeNotifier {
   final MateriRepository repository = MateriRepository();
   List<Materi> items = [];
-  Future<void> load(int courseId) async {
+  Future<void> load(String courseId) async {
     items = await repository.getByCourse(courseId);
     notifyListeners();
   }
