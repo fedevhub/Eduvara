@@ -17,6 +17,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
   bool _loading = true;
   String? _error;
   String? _courseId;
+  String _teacherName = '-';
 
   Map<String, dynamic>? _course;
   List<Map<String, dynamic>> _materials = [];
@@ -86,6 +87,19 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
 
       final materials = List<Map<String, dynamic>>.from(results[1] as List);
       final quizzes = List<Map<String, dynamic>>.from(results[2] as List);
+      final course = Map<String, dynamic>.from(results[0] as Map);
+      final teacherId = (course['teacher_id'] ?? course['pengajar_id'])
+          ?.toString();
+      var teacherName = '-';
+      if (teacherId != null && teacherId.isNotEmpty) {
+        final profile = await _db
+            .from('profiles')
+            .select('full_name')
+            .eq('id', teacherId)
+            .maybeSingle();
+        final name = profile?['full_name']?.toString().trim();
+        if (name != null && name.isNotEmpty) teacherName = name;
+      }
 
       final matIds = materials.map((e) => e['id']).toList();
       final quizIds = quizzes.map((e) => e['id']).toList();
@@ -121,7 +135,8 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
 
       if (!mounted) return;
       setState(() {
-        _course = Map<String, dynamic>.from(results[0] as Map);
+        _course = course;
+        _teacherName = teacherName;
         _materials = materials;
         _quizzes = quizzes;
         _doneMaterials = {for (final r in doneMat) r['material_id'].toString()};
@@ -393,8 +408,8 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
           ),
           Text(
-            _course!['teacher_name']?.toString() ?? '-',
-            style: const TextStyle(fontSize: 9),
+            _teacherName,
+            style: const TextStyle(fontSize: 10, color: Ui.muted),
           ),
           const SizedBox(height: 10),
           Row(

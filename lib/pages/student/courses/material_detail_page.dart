@@ -60,7 +60,13 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
       Map<String, dynamic> material;
       try {
         material = Map<String, dynamic>.from(
-          await _db.from('materials').select().eq('id', _materialId!).single(),
+          await _db
+              .from('materials')
+              .select(
+                'id, title, description, content, summary, file_name, file_size',
+              )
+              .eq('id', _materialId!)
+              .single(),
         );
       } on PostgrestException catch (e) {
         if (e.code != 'PGRST205') rethrow;
@@ -149,16 +155,17 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
     return i == -1 ? 'FILE' : name.substring(i + 1).toUpperCase();
   }
 
-  List<Widget> _summaryParagraphs(String? summary) {
-    if (summary == null || summary.trim().isEmpty) {
+  List<Widget> _summaryParagraphs(String? text) {
+    final content = (text ?? '').trim();
+    if (content.isEmpty) {
       return const [
         Text(
-          'Belum ada ringkasan materi.',
-          style: TextStyle(fontSize: 9, color: Ui.muted),
+          'Belum ada isi materi.',
+          style: TextStyle(fontSize: 14, color: Ui.muted, height: 1.5),
         ),
       ];
     }
-    return [MaterialMarkdown(data: summary, fontSize: 9)];
+    return [MaterialMarkdown(data: content, fontSize: 14)];
   }
 
   @override
@@ -204,17 +211,17 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
     final fileName = _material!['file_name']?.toString();
     final hasFile = fileName != null && fileName.isNotEmpty;
     final sizeText = _formatSize(_material!['file_size']);
-    final summary =
-        [
-              _material!['summary'],
-              _material!['content'],
-              _material!['description'],
-            ]
-            .map((value) => value?.toString())
-            .firstWhere(
-              (value) => value != null && value.trim().isNotEmpty,
-              orElse: () => null,
-            );
+    String firstNonEmpty(Iterable<dynamic> values) => values
+        .map((value) => value?.toString().trim() ?? '')
+        .firstWhere((value) => value.isNotEmpty, orElse: () => '');
+    final description = firstNonEmpty([
+      _material!['description'],
+      _material!['summary'],
+    ]);
+    final content = firstNonEmpty([
+      _material!['content'],
+      _material!['summary'],
+    ]);
 
     return Scaffold(
       backgroundColor: Ui.bg,
@@ -222,56 +229,72 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
         child: Stack(
           children: [
             SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 80),
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 80),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const BackLink(),
+                  const SizedBox(height: 8),
                   Text(
                     _materialTitle,
                     style: const TextStyle(
-                      fontSize: 16,
+                      fontSize: 24,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 16),
+                  if (description.isNotEmpty) ...[
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        height: 1.6,
+                        color: Ui.text,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                  ],
                   EduCard(
-                    padding: const EdgeInsets.all(14),
+                    padding: const EdgeInsets.all(20),
+                    radius: 18,
+                    borderColor: Ui.line,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
                           'Isi Materi',
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 18,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        ..._summaryParagraphs(summary),
+                        const SizedBox(height: 10),
+                        ..._summaryParagraphs(content),
                       ],
                     ),
                   ),
                   if (hasFile) ...[
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     EduCard(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(16),
+                      radius: 18,
+                      borderColor: Ui.line,
                       child: Row(
                         children: [
                           Container(
-                            width: 26,
-                            height: 26,
+                            width: 40,
+                            height: 40,
                             decoration: BoxDecoration(
                               color: Ui.greenSoft,
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.description_outlined,
-                              size: 14,
-                              color: Ui.greenDark,
+                              size: 22,
+                              color: Ui.text,
                             ),
                           ),
-                          const SizedBox(width: 10),
+                          const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,7 +302,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                                 Text(
                                   fileName,
                                   style: const TextStyle(
-                                    fontSize: 9,
+                                    fontSize: 14,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
@@ -288,7 +311,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                                       ? _fileType(fileName)
                                       : '$sizeText • ${_fileType(fileName)}',
                                   style: const TextStyle(
-                                    fontSize: 7.5,
+                                    fontSize: 12,
                                     color: Ui.muted,
                                   ),
                                 ),

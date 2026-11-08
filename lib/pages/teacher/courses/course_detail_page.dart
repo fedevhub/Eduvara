@@ -122,21 +122,20 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     try {
       final course = await _db
           .from(_tCourses)
-          .select(
-            'id, title, description, teacher_id, subject, grade_level, status',
-          )
+          .select()
           .eq('id', _courseId!)
           .single();
 
       var teacher = '-';
-      final tid = course['teacher_id'];
-      if (tid != null) {
+      final tid = (course['teacher_id'] ?? course['pengajar_id'])?.toString();
+      if (tid != null && tid.isNotEmpty) {
         final p = await _db
             .from('profiles')
             .select('full_name')
             .eq('id', tid)
             .maybeSingle();
-        teacher = (p?['full_name'] ?? '-').toString();
+        final name = p?['full_name']?.toString().trim();
+        if (name != null && name.isNotEmpty) teacher = name;
       }
 
       var percent = 0;
@@ -358,6 +357,10 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
+                ),
+                Text(
+                  _teacherName,
+                  style: const TextStyle(fontSize: 10, color: Ui.muted),
                 ),
                 if (_description.isNotEmpty) ...[
                   const SizedBox(height: 4),
