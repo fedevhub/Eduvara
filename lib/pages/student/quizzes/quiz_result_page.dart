@@ -18,6 +18,7 @@ class _ResultData {
   );
 
   bool get passed => score >= passingScore;
+  int get maxScore => 100;
 }
 
 class QuizResultPage extends StatefulWidget {
@@ -29,6 +30,9 @@ class QuizResultPage extends StatefulWidget {
 
 class _QuizResultPageState extends State<QuizResultPage> {
   final _db = Supabase.instance.client;
+
+  bool _isMissingTableError(PostgrestException error) =>
+      error.code == 'PGRST205' || error.code == '42P01';
 
   Future<_ResultData>? _result;
   String? _attemptId;
