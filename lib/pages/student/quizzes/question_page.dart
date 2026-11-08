@@ -87,6 +87,32 @@ class _QuestionPageState extends State<QuestionPage> {
       if (questions.isEmpty) {
         throw Exception('Quiz ini belum memiliki soal.');
       }
+
+      final userId = _db.auth.currentUser?.id;
+      if (userId != null) {
+        final finished = await _db
+            .from('quiz_attempts')
+            .select('id, completed')
+            .eq('user_id', userId)
+            .eq('quiz_id', quizId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (finished != null && finished['completed'] == true) {
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(
+            context,
+            RouteNames.studentQuizResult,
+            arguments: {
+              'attempt_id': finished['id'],
+              'entity_name': quiz['title'],
+            },
+          );
+          return;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _quizTitle = quiz['title']?.toString() ?? 'Quiz';
@@ -160,21 +186,51 @@ class _QuestionPageState extends State<QuestionPage> {
         }
       }
       final wrong = _soal.length - correct;
-      final score = totalPoints == 0
-          ? 0
-          : (earnedPoints / totalPoints * 100).round();
-      final attempt = await _db
+      final score = totalPoints == 0 ? 0 : earnedPoints;
+      final submittedAnswers = {
+        for (final entry in answers.entries) entry.key.toString(): entry.value,
+      };
+      final submittedAt = DateTime.now().toUtc().toIso8601String();
+      final existing = await _db
           .from('quiz_attempts')
-          .insert({
-            'user_id': userId,
-            'quiz_id': quizId,
-            'score': score,
-            'correct_count': correct,
-            'wrong_count': wrong,
-            'completed': true,
-          })
           .select('id')
-          .single();
+          .eq('user_id', userId)
+          .eq('quiz_id', quizId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      final Map<String, dynamic> attempt;
+      if (existing == null) {
+        attempt = await _db
+            .from('quiz_attempts')
+            .insert({
+              'user_id': userId,
+              'quiz_id': quizId,
+              'score': score,
+              'correct_count': correct,
+              'wrong_count': wrong,
+              'answers': submittedAnswers,
+              'completed': true,
+              'created_at': submittedAt,
+            })
+            .select('id')
+            .single();
+      } else {
+        attempt = await _db
+            .from('quiz_attempts')
+            .update({
+              'score': score,
+              'correct_count': correct,
+              'wrong_count': wrong,
+              'answers': submittedAnswers,
+              'completed': true,
+              'created_at': submittedAt,
+            })
+            .eq('id', existing['id'])
+            .select('id')
+            .single();
+      }
 
       if (mounted) {
         Navigator.pushReplacementNamed(

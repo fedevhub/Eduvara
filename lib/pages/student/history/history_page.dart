@@ -30,12 +30,43 @@ class _StudentHistoryPageState extends State<StudentHistoryPage> {
     try {
       final data = await _db
           .from('quiz_attempts')
-          .select('id, score, created_at, quizzes(title, courses(title))')
+          .select('id, score, created_at, quiz_id')
           .eq('user_id', uid)
           .eq('completed', true)
           .order('created_at', ascending: false);
 
-      return List<Map<String, dynamic>>.from(data);
+      final rows = <Map<String, dynamic>>[];
+      for (final row in data) {
+        final quizId = row['quiz_id']?.toString();
+        if (quizId == null || quizId.isEmpty) {
+          rows.add(Map<String, dynamic>.from(row));
+          continue;
+        }
+
+        final quiz = await _db
+            .from('quizzes')
+            .select('title, course_id')
+            .eq('id', quizId)
+            .maybeSingle();
+
+        final courseId = quiz?['course_id']?.toString();
+        final course = courseId == null || courseId.isEmpty
+            ? null
+            : await _db
+                  .from('courses')
+                  .select('title')
+                  .eq('id', courseId)
+                  .maybeSingle();
+
+        final out = Map<String, dynamic>.from(row);
+        out['quizzes'] = {
+          'title': quiz?['title'],
+          'courses': {'title': course?['title']},
+        };
+        rows.add(out);
+      }
+
+      return rows;
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
       return const [];

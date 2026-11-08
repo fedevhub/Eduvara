@@ -926,11 +926,6 @@ class EduBottomNav extends StatelessWidget {
       _NavItem(Icons.home_outlined, 'Home', '/student/dashboard'),
       _NavItem(Icons.menu_book_outlined, 'Course', '/student/courses'),
       _NavItem(Icons.history, 'History', '/student/history'),
-      _NavItem(
-        Icons.notifications_none,
-        'Notification',
-        '/student/notifications',
-      ),
       _NavItem(Icons.person_outline, 'Profile', '/student/profile'),
     ],
     _ => throw ArgumentError.value(role, 'role', 'Unknown navigation role'),

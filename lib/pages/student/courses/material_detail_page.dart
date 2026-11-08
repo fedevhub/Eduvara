@@ -240,7 +240,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Ringkasan Materi',
+                          'Isi Materi',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w800,
@@ -248,7 +248,9 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                         ),
                         const SizedBox(height: 8),
                         ..._summaryParagraphs(
-                          _material!['summary']?.toString(),
+                          _material!['content']?.toString() ??
+                              _material!['description']?.toString() ??
+                              _material!['summary']?.toString(),
                         ),
                       ],
                     ),
@@ -303,40 +305,39 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                 ],
               ),
             ),
-            Positioned(
-              right: 20,
-              bottom: 16,
-              child: GestureDetector(
-                onTap: (_saving || _completed) ? null : _markComplete,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    color: _completed ? Ui.greenDark : Ui.green,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.check, size: 14, color: Colors.white),
-                      const SizedBox(width: 6),
-                      Text(
-                        _saving
-                            ? 'Menyimpan...'
-                            : (_completed ? 'Sudah Selesai' : 'Tandai Selesai'),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+            if (!_completed)
+              Positioned(
+                right: 20,
+                bottom: 16,
+                child: GestureDetector(
+                  onTap: _saving ? null : _markComplete,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Ui.green,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.check, size: 14, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text(
+                          _saving ? 'Menyimpan...' : 'Tandai Selesai',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
