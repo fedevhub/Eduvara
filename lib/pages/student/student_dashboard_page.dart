@@ -40,6 +40,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   final _db = Supabase.instance.client;
   final _repository = CourseRepository();
   late Future<_DashData> _data;
+  int _unreadNotifications = 0;
 
   @override
   void initState() {
@@ -81,6 +82,21 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                 '-')
             .toString();
 
+    try {
+      final rows = await _db
+          .from('notifications')
+          .select('id')
+          .or('user_id.eq.${user.id},user_id.is.null')
+          .eq('is_read', false)
+          .limit(99);
+      _unreadNotifications = List<Map<String, dynamic>>.from(rows).length;
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) {
+        debugPrint('[StudentDashboard] gagal memuat count notifikasi: $e');
+      }
+      _unreadNotifications = 0;
+    }
+
     final courses = await _repository.getCourses();
     if (courses.isEmpty) return _DashData(name, const []);
 
@@ -99,12 +115,32 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       if (e.code != 'PGRST205') rethrow;
     }
 
+    List<Map<String, dynamic>> quizzes = const [];
+    try {
+      quizzes = List<Map<String, dynamic>>.from(
+        await _db
+            .from('quizzes')
+            .select('id, course_id')
+            .inFilter('course_id', courseIds),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST205') rethrow;
+    }
+
     final totalByCourse = <String, int>{};
     final courseByMaterial = <String, String>{};
     for (final m in materials) {
       final cid = m['course_id'].toString();
       totalByCourse[cid] = (totalByCourse[cid] ?? 0) + 1;
       courseByMaterial[m['id'].toString()] = cid;
+    }
+
+    final totalQuizByCourse = <String, int>{};
+    final quizById = <String, String>{};
+    for (final q in quizzes) {
+      final cid = q['course_id'].toString();
+      totalQuizByCourse[cid] = (totalQuizByCourse[cid] ?? 0) + 1;
+      quizById[q['id'].toString()] = cid;
     }
 
     final quizzes = List<Map<String, dynamic>>.from(
@@ -136,21 +172,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
       }
     }
-    if (courseByQuiz.isNotEmpty) {
-      final attempts = await _db
-          .from('quiz_attempts')
-          .select('quiz_id')
-          .eq('user_id', user.id)
-          .eq('completed', true)
-          .inFilter('quiz_id', courseByQuiz.keys.toList());
-      final completedQuizIds = <String>{};
-      for (final attempt in attempts) {
-        final quizId = attempt['quiz_id'].toString();
-        if (!completedQuizIds.add(quizId)) continue;
-        final cid = courseByQuiz[quizId];
-        if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
-      }
-    }
 
     // status: terkunci jika course sebelumnya belum selesai
     final infos = <_CourseInfo>[];
@@ -160,8 +181,11 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final totalMaterials = totalByCourse[cid] ?? 0;
       final total = totalMaterials + (totalQuizzesByCourse[cid] ?? 0);
       final done = doneByCourse[cid] ?? 0;
+      final totalQuiz = totalQuizByCourse[cid] ?? 0;
+      final doneQuiz = doneQuizByCourse[cid] ?? 0;
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
-      final isDone = total > 0 && done >= total;
+      final quizDone = totalQuiz > 0 && doneQuiz >= totalQuiz;
+      final isDone = (total > 0 && done >= total) || quizDone;
 
       final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
 
@@ -291,6 +315,43 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     ),
   );
 
+  Widget _NotificationButton({
+    required int count,
+    required VoidCallback onTap,
+  }) => IconButton(
+    tooltip: 'Notifikasi',
+    onPressed: onTap,
+    icon: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.notifications_none_rounded, size: 27, color: Ui.navy),
+        if (count > 0)
+          Positioned(
+            right: -5,
+            top: -5,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              constraints: const BoxConstraints(minWidth: 17, minHeight: 17),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white, width: 1.5),
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+      ],
+    ),
+  );
+
   Widget _content(_DashData d) {
     final running = d.first(_St.running);
     final locked = d.first(_St.locked);
@@ -304,7 +365,10 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Panel Student', style: TextStyle(fontSize: 11)),
+                  const Text(
+                    'Dashboard Student',
+                    style: TextStyle(fontSize: 11),
+                  ),
                   Text(
                     d.name,
                     style: const TextStyle(
@@ -315,6 +379,17 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                 ],
               ),
             ),
+            _NotificationButton(
+              count: _unreadNotifications,
+              onTap: () async {
+                await Navigator.pushNamed(
+                  context,
+                  RouteNames.studentNotifications,
+                );
+                if (mounted) _reload();
+              },
+            ),
+            const SizedBox(width: 10),
             DarkAvatar(name: d.name, size: 34),
           ],
         ),

@@ -5,22 +5,19 @@ import '../../../core/routes/route_names.dart';
 
 class _ResultData {
   final int score;
-  final int totalPoints;
   final int correct;
   final int wrong;
   final int passingScore;
   final dynamic courseId;
   const _ResultData(
     this.score,
-    this.totalPoints,
     this.correct,
     this.wrong,
     this.passingScore,
     this.courseId,
   );
 
-  bool get passed =>
-      totalPoints > 0 && score * 100 / totalPoints >= passingScore;
+  bool get passed => score >= passingScore;
 }
 
 class QuizResultPage extends StatefulWidget {
@@ -56,28 +53,28 @@ class _QuizResultPageState extends State<QuizResultPage> {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
 
-    final row = await _db
-        .from('quiz_attempts')
-        .select(
-          'score, total_points, correct_count, wrong_count, '
-          'quizzes(course_id, passing_score)',
-        )
-        .eq('id', _attemptId!)
-        .eq('user_id', uid)
-        .single();
+    try {
+      final row = await _db
+          .from('quiz_attempts')
+          .select(
+            'score, correct_count, wrong_count, quizzes(course_id, passing_score)',
+          )
+          .eq('id', _attemptId!)
+          .eq('user_id', uid)
+          .single();
 
-    final quiz = row['quizzes'] as Map?;
-    if (quiz == null) {
-      throw const FormatException('Course quiz tidak ditemukan.');
+      final quiz = row['quizzes'] as Map?;
+      return _ResultData(
+        (row['score'] as num?)?.round() ?? 0,
+        (row['correct_count'] as num?)?.toInt() ?? 0,
+        (row['wrong_count'] as num?)?.toInt() ?? 0,
+        (quiz?['passing_score'] as num?)?.toInt() ?? 80,
+        quiz?['course_id'],
+      );
+    } on PostgrestException catch (e) {
+      if (!_isMissingTableError(e)) rethrow;
+      return const _ResultData(0, 0, 0, 80, null);
     }
-    return _ResultData(
-      (row['score'] as num?)?.round() ?? 0,
-      (row['total_points'] as num?)?.round() ?? 0,
-      (row['correct_count'] as num?)?.toInt() ?? 0,
-      (row['wrong_count'] as num?)?.toInt() ?? 0,
-      (quiz['passing_score'] as num?)?.toInt() ?? 80,
-      quiz['course_id'],
-    );
   }
 
   void _reload() {
@@ -125,7 +122,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
             ),
             const SizedBox(height: 14),
             Container(
-              width: 82,
+              width: 94,
               height: 82,
               decoration: BoxDecoration(
                 color: Colors.white.withValues(alpha: 0.25),
@@ -135,16 +132,16 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '${d.score}',
+                    '${d.score}/${d.maxScore}',
                     style: const TextStyle(
-                      fontSize: 34,
+                      fontSize: 28,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
                   ),
-                  Text(
-                    'Dari ${d.totalPoints} Poin',
-                    style: const TextStyle(fontSize: 7, color: Colors.white),
+                  const Text(
+                    'Dari 100 Poin',
+                    style: TextStyle(fontSize: 7, color: Colors.white),
                   ),
                 ],
               ),
@@ -168,7 +165,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   const SizedBox(height: 6),
                   _row('Jumlah Benar', '${d.correct} Soal'),
                   _row('Jawaban Salah', '${d.wrong} Soal'),
-                  _row('Nilai Minimum Lulus', '${d.passingScore}/100'),
+                  _row('Nilai Minimum Lulus', '${d.passingScore}%'),
                 ],
               ),
             ),

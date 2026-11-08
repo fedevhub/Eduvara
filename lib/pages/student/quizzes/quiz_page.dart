@@ -33,7 +33,7 @@ class _QuizPageState extends State<QuizPage> {
     if (id == null || id.isEmpty) {
       throw const FormatException('Quiz tidak ditemukan. Kembali ke course.');
     }
-    final quiz = Map<String, dynamic>.from(
+    return Map<String, dynamic>.from(
       await _db
           .from('quizzes')
           .select(
@@ -42,19 +42,6 @@ class _QuizPageState extends State<QuizPage> {
           .eq('id', id)
           .single(),
     );
-    final userId = _db.auth.currentUser?.id;
-    if (userId == null) {
-      throw const AuthException('Sesi login tidak ditemukan.');
-    }
-    final previousAttempt = await _db
-        .from('quiz_attempts')
-        .select('id')
-        .eq('quiz_id', id)
-        .eq('user_id', userId)
-        .eq('completed', true)
-        .limit(1)
-        .maybeSingle();
-    return {...quiz, 'completed': previousAttempt != null};
   }
 
   Widget _row(String label, String value) => Padding(
@@ -145,7 +132,7 @@ class _QuizPageState extends State<QuizPage> {
             ),
             const SizedBox(height: 10),
             GestureDetector(
-              onTap: completed || (quiz['question_count'] as num? ?? 0) <= 0
+              onTap: (quiz['question_count'] as num? ?? 0) <= 0
                   ? null
                   : () => Navigator.pushNamed(
                       context,
@@ -156,31 +143,28 @@ class _QuizPageState extends State<QuizPage> {
                 height: 34,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: completed || (quiz['question_count'] as num? ?? 0) <= 0
+                  color: (quiz['question_count'] as num? ?? 0) <= 0
                       ? Ui.line
                       : Ui.blueSoft,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: Ui.blue.withValues(alpha: 0.5)),
                 ),
                 child: Text(
-                  completed
-                      ? 'Quiz sudah diselesaikan'
-                      : (quiz['question_count'] as num? ?? 0) <= 0
+                  (quiz['question_count'] as num? ?? 0) <= 0
                       ? 'Quiz belum memiliki soal'
                       : 'Mulai Quiz Sekarang',
                   style: TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color:
-                        completed || (quiz['question_count'] as num? ?? 0) <= 0
+                    color: (quiz['question_count'] as num? ?? 0) <= 0
                         ? Ui.muted
                         : Ui.blue,
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          );
+        },
       );
     },
   );
