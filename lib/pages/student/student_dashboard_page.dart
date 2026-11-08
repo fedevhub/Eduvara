@@ -313,7 +313,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     ),
   );
 
-  Widget _NotificationButton({
+  Widget _notificationButton({
     required int count,
     required VoidCallback onTap,
   }) => IconButton(
@@ -377,7 +377,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                 ],
               ),
             ),
-            _NotificationButton(
+            _notificationButton(
               count: _unreadNotifications,
               onTap: () async {
                 await Navigator.pushNamed(

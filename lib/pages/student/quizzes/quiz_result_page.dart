@@ -5,20 +5,27 @@ import '../../../core/routes/route_names.dart';
 
 class _ResultData {
   final int score;
+  final int totalPoints;
   final int correct;
   final int wrong;
   final int passingScore;
   final dynamic courseId;
   const _ResultData(
     this.score,
+    this.totalPoints,
     this.correct,
     this.wrong,
     this.passingScore,
     this.courseId,
   );
 
-  bool get passed => score >= passingScore;
-  int get maxScore => 100;
+  bool get passed {
+    if (totalPoints <= 0) return score >= passingScore;
+    final percent = (score / totalPoints) * 100;
+    return percent >= passingScore;
+  }
+
+  int get maxScore => totalPoints;
 }
 
 class QuizResultPage extends StatefulWidget {
@@ -61,15 +68,18 @@ class _QuizResultPageState extends State<QuizResultPage> {
       final row = await _db
           .from('quiz_attempts')
           .select(
-            'score, correct_count, wrong_count, quizzes(course_id, passing_score)',
+            'score, total_points, correct_count, wrong_count, quizzes(course_id, passing_score)',
           )
           .eq('id', _attemptId!)
           .eq('user_id', uid)
           .single();
 
       final quiz = row['quizzes'] as Map?;
+      final score = (row['score'] as num?)?.round() ?? 0;
+      final totalPoints = (row['total_points'] as num?)?.round() ?? 0;
       return _ResultData(
-        (row['score'] as num?)?.round() ?? 0,
+        score,
+        totalPoints,
         (row['correct_count'] as num?)?.toInt() ?? 0,
         (row['wrong_count'] as num?)?.toInt() ?? 0,
         (quiz?['passing_score'] as num?)?.toInt() ?? 80,
@@ -77,7 +87,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
       );
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
-      return const _ResultData(0, 0, 0, 80, null);
+      return const _ResultData(0, 0, 0, 0, 80, null);
     }
   }
 
@@ -143,9 +153,9 @@ class _QuizResultPageState extends State<QuizResultPage> {
                       color: Colors.white,
                     ),
                   ),
-                  const Text(
-                    'Dari 100 Poin',
-                    style: TextStyle(fontSize: 7, color: Colors.white),
+                  Text(
+                    d.maxScore > 0 ? 'Dari ${d.maxScore} Poin' : 'Skor Akhir',
+                    style: const TextStyle(fontSize: 7, color: Colors.white),
                   ),
                 ],
               ),
