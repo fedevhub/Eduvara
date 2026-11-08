@@ -27,14 +27,21 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_courseId != null) return;
     final args = ModalRoute.of(context)?.settings.arguments;
-    if (args is Map && args['course_id'] != null) {
-      _courseId = args['course_id'].toString();
-      _load();
-    } else {
+    final nextCourseId = args is Map && args['course_id'] != null
+        ? args['course_id'].toString()
+        : null;
+
+    if (nextCourseId == null) {
+      if (_courseId != null) _courseId = null;
       _loading = false;
       _error = 'Course tidak ditemukan';
+      return;
+    }
+
+    if (_courseId != nextCourseId || _course == null) {
+      _courseId = nextCourseId;
+      _load();
     }
   }
 
@@ -68,7 +75,6 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
                 .from('quizzes')
                 .select()
                 .eq('course_id', _courseId!)
-                .eq('status', 'published')
                 .order('order_no');
             return List<Map<String, dynamic>>.from(rows as List);
           } on PostgrestException catch (e) {
@@ -169,7 +175,12 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
     String sub, {
     bool open = false,
     bool done = false,
+    int index = 0,
   }) {
+    final displayTitle = title.trim().isEmpty
+        ? (tab == 0 ? 'Materi ${index + 1}' : 'Quiz ${index + 1}')
+        : title;
+
     final card = EduCard(
       borderColor: open ? Ui.blue : (done ? Ui.green : null),
       padding: const EdgeInsets.all(12),
@@ -181,7 +192,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
                     ? RouteNames.studentMaterialDetail
                     : RouteNames.studentQuiz,
                 arguments: {
-                  'entity_name': title,
+                  'entity_name': displayTitle,
                   'id': data['id'],
                   'course_id': _courseId,
                 },
@@ -197,7 +208,9 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  displayTitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
@@ -237,6 +250,58 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
     );
   }
 
+  String _safeTitle(
+    Map<String, dynamic> data,
+    String fallbackPrefix, [
+    int index = 0,
+  ]) {
+    final raw =
+        data['title'] ??
+        data['name'] ??
+        data['course_name'] ??
+        data['lesson_name'];
+
+    final text = raw?.toString().trim();
+    if (text != null &&
+        text.isNotEmpty &&
+        text != 'null' &&
+        !RegExp(r'^\d+$').hasMatch(text)) {
+      return text;
+    }
+    return '$fallbackPrefix ${index + 1}';
+  }
+
+  String _safeSubtitle(Map<String, dynamic> data) {
+    final dateValue = data['created_at'] ?? data['scheduled_at'];
+    final parsedDate = _formatDate(dateValue);
+    if (parsedDate != '-' && parsedDate != 'null') {
+      return parsedDate;
+    }
+
+    final description = data['description']?.toString().trim();
+    if (description != null &&
+        description.isNotEmpty &&
+        description != 'null') {
+      return description;
+    }
+
+    if (tab == 0) {
+      final qCount = data['question_count'];
+      final dMinutes = data['duration_minutes'];
+      if (qCount != null || dMinutes != null) {
+        return '${qCount ?? 0} Soal | ${dMinutes ?? 0} Menit';
+      }
+      return 'Belum ada jadwal';
+    }
+
+    final qCount = data['question_count'];
+    final dMinutes = data['duration_minutes'];
+    if (qCount != null || dMinutes != null) {
+      return '${qCount ?? 0} Soal | ${dMinutes ?? 0} Menit';
+    }
+    return 'Belum ada detail quiz';
+  }
+
   List<Widget> _buildList() {
     if (tab == 0) {
       if (_materials.isEmpty) return [_empty('Belum ada materi')];
@@ -245,10 +310,11 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
         for (var i = 0; i < _materials.length; i++)
           _item(
             _materials[i],
-            _materials[i]['title']?.toString() ?? '-',
-            _formatDate(_materials[i]['scheduled_at']),
+            _safeTitle(_materials[i], 'Materi', i),
+            _safeSubtitle(_materials[i]),
             open: st[i].open,
             done: st[i].done,
+            index: i,
           ),
       ];
     }
@@ -258,11 +324,11 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
       for (var i = 0; i < _quizzes.length; i++)
         _item(
           _quizzes[i],
-          _quizzes[i]['title']?.toString() ?? '-',
-          '${_quizzes[i]['question_count'] ?? 0} Soal | '
-          '${_quizzes[i]['duration_minutes'] ?? 0} Menit',
+          _safeTitle(_quizzes[i], 'Quiz', i),
+          _safeSubtitle(_quizzes[i]),
           open: st[i].open,
           done: st[i].done,
+          index: i,
         ),
     ];
   }
