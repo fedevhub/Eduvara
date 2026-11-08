@@ -377,8 +377,8 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
               ),
               _iconBtn(
                 Icons.visibility_outlined,
-                Ui.blueSoft,
-                Ui.blue,
+                Ui.greenSoft,
+                Ui.greenDark,
                 () => Navigator.pushNamed(
                   context,
                   RouteNames.teacherMaterialDetail,
@@ -439,8 +439,8 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
               ),
               _iconBtn(
                 Icons.visibility_outlined,
-                Ui.blueSoft,
-                Ui.blue,
+                Ui.greenSoft,
+                Ui.greenDark,
                 () => Navigator.pushNamed(
                   context,
                   RouteNames.teacherQuizDetail,

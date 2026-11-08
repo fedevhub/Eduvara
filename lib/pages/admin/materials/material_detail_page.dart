@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../components/navigation/app_bar.dart';
+import '../../../components/ui/material_markdown.dart';
 
 class AdminMaterialDetailPage extends StatefulWidget {
   const AdminMaterialDetailPage({super.key});
@@ -88,9 +89,9 @@ class _AdminMaterialDetailPageState extends State<AdminMaterialDetailPage> {
                       ),
                     ],
                     const SizedBox(height: 14),
-                    Text(
-                      (material['content'] ?? '').toString(),
-                      style: const TextStyle(height: 1.6),
+                    MaterialMarkdown(
+                      data: (material['content'] ?? '').toString(),
+                      fontSize: 14,
                     ),
                   ],
                 ),

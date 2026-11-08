@@ -72,10 +72,14 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
     };
   }
 
-  Widget _info(String label, String value) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 9),
+  Widget _info(String label, String value, {bool last = false}) => Container(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    decoration: BoxDecoration(
+      border: last
+          ? null
+          : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
+    ),
     child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Text(
@@ -83,11 +87,10 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
             style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
           ),
         ),
-        const SizedBox(width: 12),
         Flexible(
           child: Text(
             value,
-            textAlign: TextAlign.end,
+            textAlign: TextAlign.right,
             style: const TextStyle(fontSize: 10, color: Ui.muted),
           ),
         ),
@@ -147,100 +150,134 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
             .map((course) => course.toString())
             .toList();
         final status = student['status']?.toString() ?? '-';
+        final email = student['email']?.toString() ?? '-';
 
-        return EduScaffold(
-          bottom: const EduBottomNav(role: 'teacher', current: 2),
-          body: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const BackLink(),
-              EduCard(
-                padding: const EdgeInsets.all(14),
-                child: Row(
-                  children: [
-                    DarkAvatar(name: name, size: 44),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            name,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          Text(
-                            student['email']?.toString() ?? '-',
-                            style: const TextStyle(
-                              fontSize: 9,
-                              color: Ui.muted,
-                            ),
-                          ),
-                        ],
-                      ),
+        return Scaffold(
+          backgroundColor: Ui.bg,
+          bottomNavigationBar: const EduBottomNav(role: 'teacher', current: 2),
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.fromLTRB(
+                    20,
+                    MediaQuery.of(context).padding.top + 8,
+                    20,
+                    22,
+                  ),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Colors.white, Color(0xFF93B4F8), Ui.blue],
                     ),
-                  ],
+                    borderRadius: BorderRadius.vertical(
+                      bottom: Radius.circular(28),
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: BackLink(),
+                      ),
+                      const SizedBox(height: 4),
+                      DarkAvatar(name: name, size: 64),
+                      const SizedBox(height: 8),
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                      Text(
+                        email,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              EduCard(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 4,
-                ),
-                child: Column(
-                  children: [
-                    _info('Nama', name),
-                    const Divider(height: 1),
-                    _info('Email', student['email']?.toString() ?? '-'),
-                    const Divider(height: 1),
-                    _info('Kelas', student['class_name']?.toString() ?? '-'),
-                    const Divider(height: 1),
-                    _info('Status akun', status),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Course Diikuti',
-                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 8),
-              if (courses.isEmpty)
-                const Text(
-                  'Belum terdaftar pada course.',
-                  style: TextStyle(fontSize: 10, color: Ui.muted),
-                )
-              else
-                for (final course in courses)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: EduCard(
-                      padding: const EdgeInsets.all(11),
-                      child: Row(
-                        children: [
-                          const Icon(
-                            Icons.menu_book_outlined,
-                            size: 16,
-                            color: Ui.blue,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              course,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      EduCard(
+                        padding: const EdgeInsets.all(14),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Informasi Akun',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _info('Email', email),
+                            _info('Role', 'Siswa'),
+                            _info('Status', status),
+                            _info(
+                              'Kelas',
+                              student['class_name']?.toString() ?? '-',
+                              last: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Course Diikuti',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (courses.isEmpty)
+                        const Text(
+                          'Belum terdaftar pada course.',
+                          style: TextStyle(fontSize: 10, color: Ui.muted),
+                        )
+                      else
+                        for (final course in courses)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: EduCard(
+                              padding: const EdgeInsets.all(11),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.menu_book_outlined,
+                                    size: 16,
+                                    color: Ui.blue,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      course,
+                                      style: const TextStyle(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                    ],
                   ),
-            ],
+                ),
+              ],
+            ),
           ),
         );
       },
