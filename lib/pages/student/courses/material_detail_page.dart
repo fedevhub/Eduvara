@@ -60,7 +60,13 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
       Map<String, dynamic> material;
       try {
         material = Map<String, dynamic>.from(
-          await _db.from('materials').select().eq('id', _materialId!).single(),
+          await _db
+              .from('materials')
+              .select(
+                'id, title, description, content, summary, file_name, file_size',
+              )
+              .eq('id', _materialId!)
+              .single(),
         );
       } on PostgrestException catch (e) {
         if (e.code != 'PGRST205') rethrow;
@@ -149,16 +155,17 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
     return i == -1 ? 'FILE' : name.substring(i + 1).toUpperCase();
   }
 
-  List<Widget> _summaryParagraphs(String? summary) {
-    if (summary == null || summary.trim().isEmpty) {
+  List<Widget> _summaryParagraphs(String? text) {
+    final content = (text ?? '').trim();
+    if (content.isEmpty) {
       return const [
         Text(
-          'Belum ada ringkasan materi.',
+          'Belum ada isi materi.',
           style: TextStyle(fontSize: 9, color: Ui.muted),
         ),
       ];
     }
-    return [MaterialMarkdown(data: summary, fontSize: 9)];
+    return [MaterialMarkdown(data: content, fontSize: 9)];
   }
 
   @override
@@ -204,6 +211,13 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
     final fileName = _material!['file_name']?.toString();
     final hasFile = fileName != null && fileName.isNotEmpty;
     final sizeText = _formatSize(_material!['file_size']);
+    final description =
+        (_material!['description'] ?? _material!['summary'] ?? '')
+            .toString()
+            .trim();
+    final content = (_material!['content'] ?? _material!['summary'] ?? '')
+        .toString()
+        .trim();
 
     return Scaffold(
       backgroundColor: Ui.bg,
@@ -224,6 +238,17 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                     ),
                   ),
                   const SizedBox(height: 10),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        height: 1.5,
+                        color: Ui.text,
+                      ),
+                    ),
+                  ],
                   EduCard(
                     padding: const EdgeInsets.all(14),
                     child: Column(
@@ -237,9 +262,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        ..._summaryParagraphs(
-                          _material!['summary']?.toString(),
-                        ),
+                        ..._summaryParagraphs(content),
                       ],
                     ),
                   ),
