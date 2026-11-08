@@ -79,6 +79,32 @@ class _QuestionPageState extends State<QuestionPage> {
       if (questions.isEmpty) {
         throw Exception('Quiz ini belum memiliki soal.');
       }
+
+      final userId = _db.auth.currentUser?.id;
+      if (userId != null) {
+        final finished = await _db
+            .from('quiz_attempts')
+            .select('id, completed')
+            .eq('user_id', userId)
+            .eq('quiz_id', quizId)
+            .order('created_at', ascending: false)
+            .limit(1)
+            .maybeSingle();
+
+        if (finished != null && finished['completed'] == true) {
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(
+            context,
+            RouteNames.studentQuizResult,
+            arguments: {
+              'attempt_id': finished['id'],
+              'entity_name': quiz['title'],
+            },
+          );
+          return;
+        }
+      }
+
       if (!mounted) return;
       setState(() {
         _quizTitle = quiz['title']?.toString() ?? 'Quiz';
@@ -139,22 +165,34 @@ class _QuestionPageState extends State<QuestionPage> {
         throw Exception('Sesi login berakhir, silakan login ulang.');
       }
 
-      final attemptId = await _db.rpc(
-        'submit_quiz_attempt',
-        params: {
-          'p_quiz_id': quizId,
-          'p_answers': [
-            for (final answer in answers.entries)
-              {
-                'question_id': _soal[answer.key].id,
-                'selected_option': answer.value,
-              },
-          ],
-        },
+      var correct = 0;
+      var earnedPoints = 0;
+      final totalPoints = _soal.fold<int>(
+        0,
+        (total, question) => total + question.points,
       );
-      if (attemptId == null) {
-        throw Exception('Database tidak mengembalikan ID hasil quiz.');
+      for (var i = 0; i < _soal.length; i++) {
+        if (answers[i] == _soal[i].correctOption) {
+          correct++;
+          earnedPoints += _soal[i].points;
+        }
       }
+      final wrong = _soal.length - correct;
+      final score = totalPoints == 0
+          ? 0
+          : (earnedPoints / totalPoints * 100).round();
+      final attempt = await _db
+          .from('quiz_attempts')
+          .insert({
+            'user_id': userId,
+            'quiz_id': quizId,
+            'score': score,
+            'correct_count': correct,
+            'wrong_count': wrong,
+            'completed': true,
+          })
+          .select('id')
+          .single();
 
       if (mounted) {
         Navigator.pushReplacementNamed(

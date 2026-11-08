@@ -55,12 +55,32 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       if (e.code != 'PGRST205') rethrow;
     }
 
+    List<Map<String, dynamic>> quizzes = const [];
+    try {
+      quizzes = List<Map<String, dynamic>>.from(
+        await _db
+            .from('quizzes')
+            .select('id, course_id')
+            .inFilter('course_id', courseIds),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST205') rethrow;
+    }
+
     final totalByCourse = <String, int>{};
     final courseByMaterial = <String, String>{};
     for (final m in materials) {
       final cid = m['course_id'].toString();
       totalByCourse[cid] = (totalByCourse[cid] ?? 0) + 1;
       courseByMaterial[m['id'].toString()] = cid;
+    }
+
+    final totalQuizByCourse = <String, int>{};
+    final quizById = <String, String>{};
+    for (final q in quizzes) {
+      final cid = q['course_id'].toString();
+      totalQuizByCourse[cid] = (totalQuizByCourse[cid] ?? 0) + 1;
+      quizById[q['id'].toString()] = cid;
     }
 
     final quizzes = List<Map<String, dynamic>>.from(
@@ -92,21 +112,6 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
         if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
       }
     }
-    if (courseByQuiz.isNotEmpty) {
-      final attempts = await _db
-          .from('quiz_attempts')
-          .select('quiz_id')
-          .eq('user_id', uid)
-          .eq('completed', true)
-          .inFilter('quiz_id', courseByQuiz.keys.toList());
-      final completedQuizIds = <String>{};
-      for (final attempt in attempts) {
-        final quizId = attempt['quiz_id'].toString();
-        if (!completedQuizIds.add(quizId)) continue;
-        final cid = courseByQuiz[quizId];
-        if (cid != null) doneByCourse[cid] = (doneByCourse[cid] ?? 0) + 1;
-      }
-    }
 
     // hitung status: terkunci jika course sebelumnya belum selesai
     final rows = <_CourseRow>[];
@@ -116,8 +121,11 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       final total =
           (totalByCourse[cid] ?? 0) + (totalQuizzesByCourse[cid] ?? 0);
       final done = doneByCourse[cid] ?? 0;
+      final totalQuiz = totalQuizByCourse[cid] ?? 0;
+      final doneQuiz = doneQuizByCourse[cid] ?? 0;
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
-      final isDone = total > 0 && done >= total;
+      final quizDone = totalQuiz > 0 && doneQuiz >= totalQuiz;
+      final isDone = (total > 0 && done >= total) || quizDone;
 
       final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
 

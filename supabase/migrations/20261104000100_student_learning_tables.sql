@@ -71,6 +71,9 @@ CREATE TABLE IF NOT EXISTS public.quiz_attempts (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS quiz_attempts_user_quiz_unique_idx
+  ON public.quiz_attempts (user_id, quiz_id);
+
 CREATE TABLE IF NOT EXISTS public.notifications (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,

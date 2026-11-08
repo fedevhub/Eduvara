@@ -13,11 +13,40 @@ class StudentNotificationPage extends StatefulWidget {
 class _StudentNotificationPageState extends State<StudentNotificationPage> {
   final _db = Supabase.instance.client;
   late Future<List<Map<String, dynamic>>> _items;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _items = _load();
+  }
+
+  Future<void> _markAllAsRead() async {
+    final uid = _db.auth.currentUser?.id;
+    if (uid == null || _busy) return;
+
+    setState(() => _busy = true);
+    try {
+      await _db
+          .from('notifications')
+          .update({'is_read': true})
+          .or('user_id.eq.$uid,user_id.is.null')
+          .eq('is_read', false);
+
+      if (!mounted) return;
+      setState(() {
+        _items = _load();
+      });
+    } catch (e) {
+      debugPrint('[StudentNotifications] gagal menandai semua dibaca: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal membaca semua notifikasi: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   bool _isMissingTableError(PostgrestException e) =>
@@ -134,14 +163,36 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
 
   @override
   Widget build(BuildContext context) => EduScaffold(
-    bottom: const EduBottomNav(role: 'student', current: 3),
+    bottom: const EduBottomNav(role: 'student', current: 2),
     body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 6),
-        const Text(
-          'Notification',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Notification',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+            ),
+            TextButton(
+              onPressed: _busy ? null : _markAllAsRead,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+              ),
+              child: Text(
+                _busy ? 'Memproses...' : 'Baca Semua',
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 2),
         FutureBuilder<List<Map<String, dynamic>>>(

@@ -49,9 +49,39 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
   String _pick(Map<String, dynamic> r, List<String> keys, [String def = '']) {
     for (final k in keys) {
       final v = r[k];
-      if (v != null && v.toString().isNotEmpty) return v.toString();
+      if (v != null && v.toString().trim().isNotEmpty) return v.toString();
     }
     return def;
+  }
+
+  String _safeTitle(
+    Map<String, dynamic> row,
+    List<String> keys,
+    String fallbackPrefix, [
+    int index = 0,
+  ]) {
+    final raw = _pick(row, keys, '');
+    final text = raw.trim();
+    if (text.isNotEmpty && text != 'null' && !RegExp(r'^\d+$').hasMatch(text)) {
+      return text;
+    }
+    return '$fallbackPrefix ${index + 1}';
+  }
+
+  String _subtitleForMaterial(Map<String, dynamic> row, [int index = 0]) {
+    final created = _formatDate(row['created_at']);
+    if (created.isNotEmpty) return created;
+    final desc = _pick(row, ['description', 'deskripsi', 'summary'], '');
+    if (desc.isNotEmpty && desc != 'null') return desc;
+    return 'Materi ${index + 1}';
+  }
+
+  String _subtitleForQuiz(Map<String, dynamic> row, [int index = 0]) {
+    final desc = _pick(row, ['description', 'deskripsi', 'summary'], '');
+    if (desc.isNotEmpty && desc != 'null') return desc;
+    final created = _formatDate(row['created_at']);
+    if (created.isNotEmpty) return created;
+    return 'Quiz ${index + 1}';
   }
 
   String _formatDate(dynamic v) {
@@ -350,7 +380,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     ),
     const SizedBox(height: 8),
     if (_materials.isEmpty) _empty('Belum ada materi'),
-    for (final m in _materials)
+    for (var i = 0; i < _materials.length; i++)
       Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: EduCard(
@@ -362,14 +392,19 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _pick(m, ['title', 'judul', 'name'], '-'),
+                      _safeTitle(
+                        _materials[i],
+                        ['title', 'judul', 'name', 'materi_title'],
+                        'Materi',
+                        i,
+                      ),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
-                      _formatDate(m['created_at']),
+                      _subtitleForMaterial(_materials[i], i),
                       style: const TextStyle(fontSize: 8.5),
                     ),
                   ],
@@ -389,13 +424,13 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.edit_outlined,
                 Ui.blueSoft,
                 Ui.blue,
-                () => _goMaterialForm(m),
+                () => _goMaterialForm(_materials[i]),
               ),
               _iconBtn(
                 Icons.delete_outline,
                 Ui.redSoft,
                 Ui.red,
-                () => _delete(what: 'Materi', table: 'materials', id: m['id']),
+                () => _delete(what: 'Materi', table: _matTable, id: m['id']),
               ),
             ],
           ),
@@ -412,7 +447,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
     ),
     const SizedBox(height: 8),
     if (_quizzes.isEmpty) _empty('Belum ada quiz'),
-    for (final q in _quizzes)
+    for (var i = 0; i < _quizzes.length; i++)
       Padding(
         padding: const EdgeInsets.only(bottom: 8),
         child: EduCard(
@@ -424,14 +459,19 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _pick(q, ['title', 'judul', 'name'], '-'),
+                      _safeTitle(
+                        _quizzes[i],
+                        ['title', 'judul', 'name', 'quiz_title'],
+                        'Quiz',
+                        i,
+                      ),
                       style: const TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
-                      _pick(q, ['description', 'deskripsi']),
+                      _subtitleForQuiz(_quizzes[i], i),
                       style: const TextStyle(fontSize: 8.5),
                     ),
                   ],
@@ -455,7 +495,10 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                     Navigator.pushNamed(
                       context,
                       RouteNames.teacherQuizForm,
-                      arguments: {'quiz_id': q['id'], 'course_id': _courseId},
+                      arguments: {
+                        'quiz_id': _quizzes[i]['id'],
+                        'course_id': _courseId,
+                      },
                     ).then((_) {
                       if (mounted) _load();
                     }),
@@ -464,7 +507,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.delete_outline,
                 Ui.redSoft,
                 Ui.red,
-                () => _delete(what: 'Quiz', table: 'quizzes', id: q['id']),
+                () => _delete(what: 'Quiz', table: _quizTable, id: q['id']),
               ),
             ],
           ),
