@@ -30,14 +30,6 @@ class TeacherCoursesPage extends StatefulWidget {
 class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
   static const _tCourses = 'courses';
 
-  static const _enrollTables = ['enrollments'];
-  static const _materialTables = ['materials'];
-  static const _quizTables = ['quizzes'];
-  static const _courseCols = ['course_id'];
-
-  // Cache kombinasi (tabel, kolom) yang sudah terbukti berhasil.
-  static final Map<String, (String, String)> _resolved = {};
-
   final _db = Supabase.instance.client;
 
   int filter = 0;
@@ -51,54 +43,21 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
     _load();
   }
 
-  Future<Map<String, int>> _countOne(
+  Future<Map<String, int>> _countByCourse(
     String table,
-    String col,
-    List<String> ids,
+    List<String> courseIds,
   ) async {
-    final rows = await _db.from(table).select(col).inFilter(col, ids);
+    if (courseIds.isEmpty) return {};
+    final rows = await _db
+        .from(table)
+        .select('course_id')
+        .inFilter('course_id', courseIds);
     final result = <String, int>{};
     for (final r in rows) {
-      final id = r[col].toString();
+      final id = r['course_id'].toString();
       result[id] = (result[id] ?? 0) + 1;
     }
     return result;
-  }
-
-  Future<Map<String, int>> _countFlexible(
-    String key,
-    List<String> tables,
-    List<String> cols,
-    List<String> ids,
-  ) async {
-    if (ids.isEmpty) return {};
-
-    final cached = _resolved[key];
-    if (cached != null) {
-      try {
-        return await _countOne(cached.$1, cached.$2, ids);
-      } catch (e) {
-        debugPrint('Gagal hitung $key (${cached.$1}.${cached.$2}): $e');
-        return {};
-      }
-    }
-
-    for (final t in tables) {
-      for (final c in cols) {
-        try {
-          final res = await _countOne(t, c, ids);
-          _resolved[key] = (t, c);
-          debugPrint('Hitung $key pakai $t.$c');
-          return res;
-        } on PostgrestException catch (e) {
-          // Tabel tidak ada -> lewati semua kolom untuk tabel ini
-          if (e.code == 'PGRST205') break;
-          // Kolom tidak ada -> coba kolom berikutnya
-        } catch (_) {}
-      }
-    }
-    debugPrint('Tidak ketemu tabel/kolom untuk $key, tampil 0');
-    return {};
   }
 
   Future<void> _load() async {
@@ -118,24 +77,9 @@ class _TeacherCoursesPageState extends State<TeacherCoursesPage> {
 
       final ids = rows.map<String>((r) => r['id'].toString()).toList();
 
-      final students = await _countFlexible(
-        'siswa',
-        _enrollTables,
-        _courseCols,
-        ids,
-      );
-      final materials = await _countFlexible(
-        'materi',
-        _materialTables,
-        _courseCols,
-        ids,
-      );
-      final quizzes = await _countFlexible(
-        'quiz',
-        _quizTables,
-        _courseCols,
-        ids,
-      );
+      final students = await _countByCourse('enrollments', ids);
+      final materials = await _countByCourse('materials', ids);
+      final quizzes = await _countByCourse('quizzes', ids);
 
       final list = rows.map<_CourseItem>((r) {
         final id = r['id'].toString();

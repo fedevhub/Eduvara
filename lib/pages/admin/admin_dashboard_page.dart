@@ -6,7 +6,7 @@ import '../../core/routes/route_names.dart';
 class _T {
   static const profiles = 'profiles';
   static const courses = 'courses';
-  static const quizzes = 'quiz';
+  static const quizzes = 'quizzes';
   static const activities = 'activity_logs';
 }
 
@@ -94,16 +94,19 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     }
     _errors.clear();
 
-    // select('*') supaya tidak error karena nama kolom beda.
     final results = await Future.wait([
       _fetch(_T.profiles, '*'),
       _fetch(_T.courses, '*'),
-      _fetch(_T.quizzes, '*'),
+      _fetch(_T.quizzes, 'id, course_id, status'),
+      _fetch('enrollments', 'course_id, student_id'),
+      _fetch('materials', 'id, course_id'),
+      _fetch('material_progress', 'user_id, material_id, completed'),
+      _fetch('quiz_attempts', 'user_id, quiz_id, completed'),
       _fetch(
         _T.activities,
         'id, actor_role, actor_name, action, entity, entity_id, entity_name, is_read, created_at',
         orderBy: 'created_at',
-        limit: 100,
+        limit: 300,
       ),
     ]);
 
@@ -112,13 +115,17 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final profiles = results[0];
     final courses = results[1];
     final quizzes = results[2];
-    final activities = results[3];
+    final enrollments = results[3];
+    final materials = results[4];
+    final materialProgress = results[5];
+    final quizAttempts = results[6];
+    final activities = results[7];
 
     // Debug: lihat kolom asli tiap tabel di console
     for (final entry in {
       'profiles': profiles,
       'course': courses,
-      'quiz': quizzes,
+      'quizzes': quizzes,
     }.entries) {
       if (entry.value.isNotEmpty) {
         debugPrint(
@@ -134,31 +141,119 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final name = me.isNotEmpty
         ? _pick(me.first, ['full_name', 'name', 'nama'])?.toString()
         : null;
+    var unreadNotifications = 0;
+    if (uid != null) {
+      try {
+        final notifications = await _db
+            .from('notifications')
+            .select('id')
+            .eq('user_id', uid)
+            .eq('is_read', false);
+        unreadNotifications = notifications.length;
+      } catch (error) {
+        debugPrint('[AdminDashboard] gagal memuat unread notification: $error');
+        _errors.add('notifications: $error');
+      }
+    }
 
-    // Completion rate: pakai kolom persentase/progress di tabel course
+    final enrollmentsByCourse = <String, Set<String>>{};
+    for (final enrollment in enrollments) {
+      enrollmentsByCourse
+          .putIfAbsent(enrollment['course_id'].toString(), () => <String>{})
+          .add(enrollment['student_id'].toString());
+    }
+
+    final materialsByCourse = <String, Set<String>>{};
+    final courseByMaterial = <String, String>{};
+    for (final material in materials) {
+      final courseId = material['course_id'].toString();
+      final materialId = material['id'].toString();
+      materialsByCourse.putIfAbsent(courseId, () => <String>{}).add(materialId);
+      courseByMaterial[materialId] = courseId;
+    }
+
+    final publishedQuizzesByCourse = <String, Set<String>>{};
+    final courseByQuiz = <String, String>{};
+    for (final quiz in quizzes) {
+      if (quiz['status'] != 'published') continue;
+      final courseId = quiz['course_id'].toString();
+      final quizId = quiz['id'].toString();
+      publishedQuizzesByCourse
+          .putIfAbsent(courseId, () => <String>{})
+          .add(quizId);
+      courseByQuiz[quizId] = courseId;
+    }
+
+    final completedByCourse = <String, int>{};
+    for (final progress in materialProgress) {
+      if (progress['completed'] != true) continue;
+      final courseId = courseByMaterial[progress['material_id'].toString()];
+      final studentIds = courseId == null
+          ? null
+          : enrollmentsByCourse[courseId];
+      if (courseId != null &&
+          studentIds?.contains(progress['user_id'].toString()) == true) {
+        completedByCourse.update(
+          courseId,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+    }
+
+    final completedQuizAssignments = <String>{};
+    for (final attempt in quizAttempts) {
+      if (attempt['completed'] != true) continue;
+      final quizId = attempt['quiz_id'].toString();
+      final courseId = courseByQuiz[quizId];
+      final studentId = attempt['user_id'].toString();
+      if (courseId == null ||
+          enrollmentsByCourse[courseId]?.contains(studentId) != true) {
+        continue;
+      }
+      if (completedQuizAssignments.add('$courseId:$quizId:$studentId')) {
+        completedByCourse.update(
+          courseId,
+          (count) => count + 1,
+          ifAbsent: () => 1,
+        );
+      }
+    }
+
     final rates = courses.map((course) {
-      final raw = _pick(course, [
-        'percent',
-        'progress',
-        'completion_rate',
-        'completion',
-        'completed_percent',
-      ]);
-      final value = raw is num ? raw.round() : int.tryParse('$raw') ?? 0;
+      final courseId = course['id'].toString();
+      final studentCount = enrollmentsByCourse[courseId]?.length ?? 0;
+      final taskCount =
+          (materialsByCourse[courseId]?.length ?? 0) +
+          (publishedQuizzesByCourse[courseId]?.length ?? 0);
+      final totalAssignments = studentCount * taskCount;
+      final percent = totalAssignments == 0
+          ? 0
+          : ((completedByCourse[courseId] ?? 0) / totalAssignments * 100)
+                .round();
       return _CourseRate(
         (_pick(course, ['title', 'name', 'nama', 'judul']) ?? '-').toString(),
-        value.clamp(0, 100).toInt(),
+        percent.clamp(0, 100).toInt(),
       );
     }).toList();
 
     DateTime? dateOf(Map<String, dynamic> n) => DateTime.tryParse(
       '${_pick(n, ['created_at', 'date', 'time', 'timestamp'])}',
     )?.toLocal();
-    final userActivities = activities
-        .where(
-          (activity) => ['teacher', 'student'].contains(activity['actor_role']),
-        )
-        .toList();
+    final userActivities =
+        activities
+            .where(
+              (activity) =>
+                  ['teacher', 'student'].contains(activity['actor_role']),
+            )
+            .toList()
+          ..sort((a, b) {
+            final aDate = dateOf(a);
+            final bDate = dateOf(b);
+            if (aDate == null) return bDate == null ? 0 : 1;
+            if (bDate == null) return -1;
+            return bDate.compareTo(aDate);
+          });
 
     setState(() {
       _adminName = (name == null || name.isEmpty) ? 'Admin' : name;
@@ -170,9 +265,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           .length;
       _totalKursus = courses.length;
       _totalQuiz = quizzes.length;
-      _unreadNotifications = userActivities
-          .where((activity) => activity['is_read'] != true)
-          .length;
+      _unreadNotifications = unreadNotifications;
       _rates = rates;
       _activities = userActivities.take(3).map((activity) {
         final action = (activity['action'] ?? '').toString();
@@ -390,16 +483,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               for (final item in _activities)
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: item.entity != 'course' || item.courseId == null
-                      ? () => _go(RouteNames.adminCourses)
-                      : () =>
-                            Navigator.pushNamed(
-                              context,
-                              RouteNames.adminCourseDetail,
-                              arguments: item.courseId,
-                            ).then((_) {
-                              if (mounted) _loadDashboard();
-                            }),
+                  onTap: () => _go(RouteNames.adminCourses),
                   child: _Activity(item.title, _formatTime(item.createdAt)),
                 ),
           ],

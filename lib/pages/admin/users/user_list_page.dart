@@ -4,6 +4,7 @@ import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 import '../../../models/user_model.dart';
 import '../../../repositories/user_repository.dart';
+import 'user_csv_import_dialog.dart';
 
 class UserListPage extends StatefulWidget {
   const UserListPage({super.key});
@@ -78,6 +79,15 @@ class _UserListPageState extends State<UserListPage> {
   Future<void> _openForm() async {
     final saved = await Navigator.pushNamed(context, RouteNames.adminUserForm);
     if (saved == true) await _load();
+  }
+
+  Future<void> _openCsvImport() async {
+    final imported = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const UserCsvImportDialog(),
+    );
+    if (imported == true) await _load();
   }
 
   Future<void> _openDetail(UserModel u) async {
@@ -185,7 +195,26 @@ class _UserListPageState extends State<UserListPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 6),
-          PageTitle('Manajemen Pengguna', onAdd: _openForm),
+          Row(
+            children: [
+              Expanded(
+                child: PageTitle('Manajemen Pengguna', onAdd: _openForm),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _openCsvImport,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Ui.navy,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.upload_file, color: Colors.white),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 14),
           SegTabs(
             labels: [

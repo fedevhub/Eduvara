@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../components/ui/kit.dart';
@@ -32,13 +34,57 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
   int _totalStudents = 0;
   double? _avgCompletion; // 0..1, null = belum ada data
   double? _avgQuizScore; // null = belum ada data
-  bool _hasUnread = false;
+  int _unreadNotificationCount = 0;
   List<_CourseItem> _activeCourses = [];
+  RealtimeChannel? _notificationChannel;
 
   @override
   void initState() {
     super.initState();
     _load();
+    _watchNotifications();
+  }
+
+  @override
+  void dispose() {
+    final channel = _notificationChannel;
+    if (channel != null) unawaited(_db.removeChannel(channel));
+    super.dispose();
+  }
+
+  void _watchNotifications() {
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) return;
+    _notificationChannel = _db
+        .channel('teacher-notifications-$userId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'notifications',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (_) => _refreshUnreadNotificationCount(),
+        )
+        .subscribe();
+  }
+
+  Future<void> _refreshUnreadNotificationCount() async {
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final rows = await _db
+          .from('notifications')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('is_read', false);
+      if (!mounted) return;
+      setState(() => _unreadNotificationCount = rows.length);
+    } catch (e) {
+      debugPrint('[TeacherDashboard] Gagal memperbarui jumlah notifikasi: $e');
+    }
   }
 
   Future<void> _load() async {
@@ -154,9 +200,8 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
           .from('notifications')
           .select('id')
           .eq('user_id', user.id)
-          .eq('is_read', false)
-          .limit(1);
-      final unread = notificationRows.isNotEmpty;
+          .eq('is_read', false);
+      final unreadCount = notificationRows.length;
 
       final active = courses.where((c) => c['status'] == 'active').map((c) {
         final id = c['id'].toString();
@@ -179,7 +224,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         _totalStudents = allStudents.length;
         _avgCompletion = avgCompletion;
         _avgQuizScore = avgQuiz;
-        _hasUnread = unread;
+        _unreadNotificationCount = unreadCount;
         _activeCourses = active;
         _loading = false;
       });
@@ -233,8 +278,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
             for (final c in _activeCourses) ...[
               _ActiveCourse(
                 title: c.title,
-                info:
-                    '${c.studentCount} siswa • ${(c.completion * 100).round()}% selesai',
+                studentCount: c.studentCount,
                 value: c.completion,
               ),
               const SizedBox(height: 10),
@@ -250,7 +294,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Panel Teacher', style: TextStyle(fontSize: 11)),
+            const Text('Dashboard Teacher', style: TextStyle(fontSize: 11)),
             Text(
               _teacherName,
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
@@ -264,16 +308,31 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
           clipBehavior: Clip.none,
           children: [
             const Icon(Icons.notifications_none, size: 24),
-            if (_hasUnread)
+            if (_unreadNotificationCount > 0)
               Positioned(
-                right: 1,
-                top: 0,
+                right: -8,
+                top: -7,
                 child: Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
+                  constraints: const BoxConstraints(
+                    minWidth: 17,
+                    minHeight: 17,
+                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
                     color: Ui.red,
-                    shape: BoxShape.circle,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Ui.bg, width: 1.5),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    _unreadNotificationCount > 99
+                        ? '99+'
+                        : '$_unreadNotificationCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
               ),
@@ -281,7 +340,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         ),
       ),
       const SizedBox(width: 12),
-      const DarkAvatar(size: 34),
+      DarkAvatar(name: _teacherName, size: 34),
     ],
   );
 
@@ -357,11 +416,11 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
 
 class _ActiveCourse extends StatelessWidget {
   final String title;
-  final String info;
+  final int studentCount;
   final double value;
   const _ActiveCourse({
     required this.title,
-    required this.info,
+    required this.studentCount,
     required this.value,
   });
 
@@ -383,7 +442,25 @@ class _ActiveCourse extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  Text(info, style: const TextStyle(fontSize: 8.5)),
+                  Text.rich(
+                    TextSpan(
+                      style: const TextStyle(fontSize: 8.5),
+                      children: [
+                        TextSpan(text: '$studentCount siswa • '),
+                        TextSpan(
+                          text: '${(value * 100).round()}%',
+                          style: const TextStyle(
+                            color: Ui.greenDark,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const TextSpan(
+                          text: ' selesai',
+                          style: TextStyle(color: Ui.greenDark),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

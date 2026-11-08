@@ -12,13 +12,26 @@ class AuthUserModel {
   });
 
   factory AuthUserModel.fromMap(Map<String, dynamic> map, String email) {
-    final rawRole = (map['role'] ?? '').toString();
+    final legacyRole = map['id_role'];
+    final roleFromId = switch (int.tryParse(legacyRole?.toString() ?? '')) {
+      1 => 'admin',
+      2 => 'teacher',
+      3 => 'student',
+      _ => legacyRole?.toString() ?? '',
+    };
+    final rawRole = (map['role'] ?? roleFromId).toString().trim().toLowerCase();
+    final role = switch (rawRole) {
+      'guru' => 'teacher',
+      'siswa' => 'student',
+      'administrator' => 'admin',
+      _ => rawRole,
+    };
 
     return AuthUserModel(
-      id: map['id'].toString(),
-      email: email,
-      name: map['full_name'] as String,
-      role: rawRole.trim().toLowerCase(),
+      id: (map['id'] ?? map['id_user']).toString(),
+      email: (map['email'] ?? email).toString(),
+      name: (map['full_name'] ?? map['nama_lengkap'] ?? email).toString(),
+      role: role,
     );
   }
 }

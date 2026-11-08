@@ -31,7 +31,9 @@ class RouteNames {
   static const teacherCourseDetail = '/teacher/courses/detail';
   static const teacherStudentDetail = '/teacher/students/detail';
   static const teacherMaterialForm = '/teacher/materials/form';
+  static const teacherMaterialDetail = '/teacher/materials/detail';
   static const teacherQuizForm = '/teacher/quizzes/form';
+  static const teacherQuizDetail = '/teacher/quizzes/detail';
   static const teacherQuestionForm = '/teacher/quizzes/questions/form';
 
   // Student

@@ -375,9 +375,13 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
 
     final totalMat = _materials.length;
     final doneMat = _doneMaterials.length;
-    final progress = totalMat == 0 ? 0 : ((doneMat / totalMat) * 100).round();
     final totalQuiz = _quizzes.length;
     final doneQuiz = _doneQuizzes.length;
+    final totalItems = totalMat + totalQuiz;
+    final doneItems = doneMat + doneQuiz;
+    final progress = totalItems == 0
+        ? 0
+        : ((doneItems / totalItems) * 100).round();
 
     return EduScaffold(
       body: Column(

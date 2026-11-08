@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import '../../../components/ui/kit.dart';
+import '../../../components/ui/material_markdown.dart';
 import '../../../repositories/activity_repository.dart';
 
 class StudentMaterialDetailPage extends StatefulWidget {
@@ -148,12 +150,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
   }
 
   List<Widget> _summaryParagraphs(String? summary) {
-    final parts = (summary ?? '')
-        .split(RegExp(r'\n\s*\n'))
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-    if (parts.isEmpty) {
+    if (summary == null || summary.trim().isEmpty) {
       return const [
         Text(
           'Belum ada ringkasan materi.',
@@ -161,14 +158,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
         ),
       ];
     }
-    final widgets = <Widget>[];
-    for (var i = 0; i < parts.length; i++) {
-      if (i > 0) widgets.add(const SizedBox(height: 10));
-      widgets.add(
-        Text(parts[i], style: const TextStyle(fontSize: 9, height: 1.5)),
-      );
-    }
-    return widgets;
+    return [MaterialMarkdown(data: summary, fontSize: 9)];
   }
 
   @override
@@ -248,9 +238,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                         ),
                         const SizedBox(height: 8),
                         ..._summaryParagraphs(
-                          _material!['content']?.toString() ??
-                              _material!['description']?.toString() ??
-                              _material!['summary']?.toString(),
+                          _material!['summary']?.toString(),
                         ),
                       ],
                     ),

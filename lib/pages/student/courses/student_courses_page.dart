@@ -83,7 +83,22 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       quizById[q['id'].toString()] = cid;
     }
 
-    // materi yang sudah diselesaikan siswa
+    final quizzes = List<Map<String, dynamic>>.from(
+      await _db
+          .from('quizzes')
+          .select('id, course_id')
+          .inFilter('course_id', courseIds)
+          .eq('status', 'published'),
+    );
+    final totalQuizzesByCourse = <String, int>{};
+    final courseByQuiz = <String, String>{};
+    for (final quiz in quizzes) {
+      final courseId = quiz['course_id'].toString();
+      totalQuizzesByCourse[courseId] =
+          (totalQuizzesByCourse[courseId] ?? 0) + 1;
+      courseByQuiz[quiz['id'].toString()] = courseId;
+    }
+
     final doneByCourse = <String, int>{};
     if (courseByMaterial.isNotEmpty) {
       final progress = await _db
@@ -98,28 +113,13 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       }
     }
 
-    final doneQuizByCourse = <String, int>{};
-    if (quizById.isNotEmpty) {
-      final attempts = await _db
-          .from('quiz_attempts')
-          .select('quiz_id')
-          .eq('user_id', uid)
-          .eq('completed', true)
-          .inFilter('quiz_id', quizById.keys.toList());
-      for (final a in attempts) {
-        final cid = quizById[a['quiz_id'].toString()];
-        if (cid != null) {
-          doneQuizByCourse[cid] = (doneQuizByCourse[cid] ?? 0) + 1;
-        }
-      }
-    }
-
     // hitung status: terkunci jika course sebelumnya belum selesai
     final rows = <_CourseRow>[];
     var previousDone = true;
     for (final c in courses) {
       final cid = c.id.toString();
-      final total = totalByCourse[cid] ?? 0;
+      final total =
+          (totalByCourse[cid] ?? 0) + (totalQuizzesByCourse[cid] ?? 0);
       final done = doneByCourse[cid] ?? 0;
       final totalQuiz = totalQuizByCourse[cid] ?? 0;
       final doneQuiz = doneQuizByCourse[cid] ?? 0;
@@ -283,11 +283,12 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                       ),
                 )
                 .toList();
-            if (visible.isEmpty)
+            if (visible.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(16),
                 child: Text('Course tidak ditemukan.'),
               );
+            }
             return Column(
               children: [
                 for (final r in visible) _card(r.course, r.status, r.pct),

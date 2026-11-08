@@ -35,15 +35,35 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
 
   Future<void> _loadNotifications() async {
     try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) {
+        throw const AuthException('Sesi login tidak ditemukan.');
+      }
       final data = await _supabase
           .from(_table)
-          .select()
+          .select('id, user_id, title, message, created_at, is_read')
+          .eq('user_id', userId)
           .order('created_at', ascending: false);
+      final rows = List<Map<String, dynamic>>.from(data);
+      final unreadIds = rows
+          .where((row) => row['is_read'] != true)
+          .map((row) => row['id'])
+          .toList();
+      if (unreadIds.isNotEmpty) {
+        await _supabase
+            .from(_table)
+            .update({'is_read': true})
+            .eq('user_id', userId)
+            .inFilter('id', unreadIds);
+        for (final row in rows) {
+          row['is_read'] = true;
+        }
+      }
 
       if (!mounted) return;
 
       setState(() {
-        _rows = List<Map<String, dynamic>>.from(data);
+        _rows = rows;
         _loading = false;
       });
     } catch (e) {
