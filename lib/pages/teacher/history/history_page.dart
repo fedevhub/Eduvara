@@ -59,7 +59,7 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
         : List<Map<String, dynamic>>.from(
             await _db
                 .from('quiz_attempts')
-                .select('user_id, quiz_id, score, created_at')
+                .select('user_id, quiz_id, score, total_points, created_at')
                 .eq('completed', true)
                 .inFilter('quiz_id', quizIds)
                 .order('created_at', ascending: false),
@@ -100,6 +100,7 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
         'activity': 'Quiz: ${quiz['title'] ?? '-'}',
         'student': studentNames[row['user_id'].toString()] ?? 'Siswa',
         'score': row['score'],
+        'total_points': row['total_points'],
         'created_at': row['created_at'],
       });
     }
@@ -148,6 +149,10 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
 
   Widget _activityCard(Map<String, dynamic> item, DateTime? date) {
     final score = item['score'];
+    final totalPoints = item['total_points'];
+    final scoreText = score is num && totalPoints is num
+        ? '${score.round()}/${totalPoints.round()}'
+        : score?.toString() ?? '';
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: EduCard(
@@ -184,7 +189,7 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
                   borderRadius: BorderRadius.circular(7),
                 ),
                 child: Text(
-                  score.toString(),
+                  scoreText,
                   style: const TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w800,

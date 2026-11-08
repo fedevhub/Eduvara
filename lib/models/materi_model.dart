@@ -1,6 +1,6 @@
 class Materi {
-  final int id;
-  final int courseId;
+  final String id;
+  final String courseId;
   final String title;
   final String content;
 

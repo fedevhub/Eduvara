@@ -1,57 +1,160 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 
-class TeacherProfilePage extends StatelessWidget {
+class TeacherProfilePage extends StatefulWidget {
   const TeacherProfilePage({super.key});
+
+  @override
+  State<TeacherProfilePage> createState() => _TeacherProfilePageState();
+}
+
+class _TeacherProfilePageState extends State<TeacherProfilePage> {
+  final _db = Supabase.instance.client;
+  late Future<Map<String, dynamic>> _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _profile = _load();
+  }
+
+  Future<Map<String, dynamic>> _load() async {
+    final user = _db.auth.currentUser;
+    if (user == null) {
+      throw const AuthException('Sesi login tidak ditemukan.');
+    }
+
+    final profile = await _db
+        .from('profiles')
+        .select('full_name, role')
+        .eq('id', user.id)
+        .single();
+    if (profile['role'] != 'teacher') {
+      throw const AuthException('Profil ini bukan akun guru.');
+    }
+
+    final account = await _db
+        .from('user')
+        .select('email, nip, mapel, status')
+        .eq('id_user', user.id)
+        .maybeSingle();
+
+    return {
+      'name':
+          profile['full_name'] ??
+          user.userMetadata?['full_name'] ??
+          user.email ??
+          '-',
+      'email': user.email ?? account?['email'] ?? '-',
+      'nip': account?['nip'] ?? '-',
+      'subject': account?['mapel'] ?? '-',
+      'status': account?['status'] ?? '-',
+    };
+  }
+
+  void _reload() {
+    setState(() => _profile = _load());
+  }
+
+  Future<void> _logout() async {
+    final ok = await showConfirmWarning(
+      context,
+      title: 'Keluar dari Eduvara?',
+      primary: 'Ya, Keluar',
+    );
+    if (!ok || !mounted) return;
+    try {
+      await _db.auth.signOut();
+      if (!mounted) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.login,
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Gagal keluar: $e')));
+    }
+  }
 
   @override
   Widget build(BuildContext context) => EduScaffold(
     bottom: const EduBottomNav(role: 'teacher', current: 4),
-    body: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 6),
-        const Text('Profil', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 14),
-        const Center(child: DarkAvatar(name: 'Budi Santoso', size: 64)),
-        const SizedBox(height: 8),
-        const Center(
-          child: Text('Budi Santoso', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800)),
-        ),
-        const Center(
-          child: Text('budi.santoso@eduvara.id', style: TextStyle(fontSize: 10, color: Ui.muted)),
-        ),
-        const SizedBox(height: 16),
-        const EduCard(
-          padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          child: Column(
+    body: FutureBuilder<Map<String, dynamic>>(
+      future: _profile,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _Row('Role', 'Guru'),
-              _Row('Mapel', 'Matematika'),
-              _Row('Status', 'Aktif', last: true),
+              const Text(
+                'Profil belum dapat dimuat.',
+                style: TextStyle(fontSize: 11, color: Ui.muted),
+              ),
+              TextButton(onPressed: _reload, child: const Text('Coba lagi')),
             ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        SoftBtn(
-          label: 'Keluar',
-          icon: Icons.logout,
-          bg: Ui.redTint,
-          fg: Ui.red,
-          height: 38,
-          onTap: () async {
-            final ok = await showConfirmWarning(
-              context,
-              title: 'Keluar dari Eduvara?',
-              primary: 'Ya, Keluar',
-            );
-            if (ok && context.mounted) {
-              Navigator.pushNamedAndRemoveUntil(context, RouteNames.login, (r) => false);
-            }
-          },
-        ),
-      ],
+          );
+        }
+
+        final profile = snapshot.data!;
+        final name = profile['name'].toString();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 6),
+            const Text(
+              'Profil',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 14),
+            Center(child: DarkAvatar(name: name, size: 64)),
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                name,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+            Center(
+              child: Text(
+                profile['email'].toString(),
+                style: const TextStyle(fontSize: 10, color: Ui.muted),
+              ),
+            ),
+            const SizedBox(height: 16),
+            EduCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              child: Column(
+                children: [
+                  const _Row('Role', 'Guru'),
+                  _Row('NIP', profile['nip'].toString()),
+                  _Row('Mapel', profile['subject'].toString()),
+                  _Row('Status', profile['status'].toString(), last: true),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            SoftBtn(
+              label: 'Keluar',
+              icon: Icons.logout,
+              bg: Ui.redTint,
+              fg: Ui.red,
+              height: 38,
+              onTap: _logout,
+            ),
+          ],
+        );
+      },
     ),
   );
 }
@@ -66,11 +169,18 @@ class _Row extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 10),
     decoration: BoxDecoration(
-      border: last ? null : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
+      border: last
+          ? null
+          : const Border(bottom: BorderSide(color: Color(0xFFEEF1F6))),
     ),
     child: Row(
       children: [
-        Expanded(child: Text(k, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600))),
+        Expanded(
+          child: Text(
+            k,
+            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600),
+          ),
+        ),
         Text(v, style: const TextStyle(fontSize: 10, color: Ui.muted)),
       ],
     ),

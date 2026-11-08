@@ -1,7 +1,9 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../components/ui/kit.dart';
+import '../../../components/ui/material_markdown.dart';
 import '../../../repositories/activity_repository.dart';
 
 /// Tambah / Edit materi (guru).
@@ -26,7 +28,7 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
 
   final title = TextEditingController();
   final desc = TextEditingController();
-  final body = TextEditingController();
+  final body = MaterialTextEditingController();
   final link = TextEditingController();
   final _bodyFocus = FocusNode();
 
@@ -36,13 +38,15 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
   static final _uuid = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
   );
+  static final _imageMarkdown = RegExp(
+    r'!\[([^\]\n]*)\]\((https?://[^)\s]+)(?:\s+"([^"\n]*)")?\)',
+  );
 
   String? _courseId;
   String? _materialId;
   String?
   _argString; // String dari halaman sebelumnya: id course atau id materi
 
-  // File materi
   PlatformFile? _pickedFile;
   String? _existingFileUrl;
   String? _existingFileName;
@@ -50,9 +54,17 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
   bool _init = false;
   bool _loading = true;
   bool _saving = false;
+  bool _imageUploading = false;
+  bool _imagePresent = false;
   String? _loadError;
 
   bool get _isEdit => _materialId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    body.addListener(_syncImageAvailability);
+  }
 
   @override
   void didChangeDependencies() {
@@ -74,11 +86,18 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
 
   @override
   void dispose() {
+    body.removeListener(_syncImageAvailability);
     for (final c in [title, desc, body, link]) {
       c.dispose();
     }
     _bodyFocus.dispose();
     super.dispose();
+  }
+
+  void _syncImageAvailability() {
+    final containsImage = _imageMarkdown.hasMatch(body.text);
+    if (containsImage == _imagePresent || !mounted) return;
+    setState(() => _imagePresent = containsImage);
   }
 
   // ───────────────────────── DATA ─────────────────────────
@@ -141,12 +160,12 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
       withData: true,
     );
     if (res == null || res.files.isEmpty) return;
-    final f = res.files.first;
-    if (f.size > _maxFileBytes) {
+    final file = res.files.first;
+    if (file.size > _maxFileBytes) {
       _snack('Ukuran file maksimal 100MB.');
       return;
     }
-    setState(() => _pickedFile = f);
+    setState(() => _pickedFile = file);
   }
 
   void _clearFile() => setState(() {
@@ -155,15 +174,370 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
     _existingFileName = null;
   });
 
+  Future<void> _openExternalLink(String value) async {
+    final uri = Uri.tryParse(value);
+    if (uri == null || (uri.scheme != 'http' && uri.scheme != 'https')) {
+      _snack('Link tidak valid.');
+      return;
+    }
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened) _snack('Link tidak dapat dibuka.');
+    } catch (e) {
+      debugPrint('[TeacherMaterialForm] Gagal membuka pratinjau: $e');
+      _snack('Link tidak dapat dibuka.');
+    }
+  }
+
+  Uri? get _videoUri {
+    final value = link.text.trim();
+    if (value.isEmpty) return null;
+    final normalized = value.contains('://') ? value : 'https://$value';
+    final uri = Uri.tryParse(normalized);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      return null;
+    }
+    return uri;
+  }
+
+  String? _youtubeVideoId(Uri uri) {
+    final host = uri.host.toLowerCase();
+    if (host == 'youtu.be') {
+      return uri.pathSegments.isEmpty ? null : uri.pathSegments.first;
+    }
+    if (host == 'youtube.com' || host.endsWith('.youtube.com')) {
+      final videoId = uri.queryParameters['v'];
+      if (videoId != null && videoId.isNotEmpty) return videoId;
+      if (uri.pathSegments.length > 1 &&
+          const {'embed', 'shorts', 'live'}.contains(uri.pathSegments.first)) {
+        return uri.pathSegments[1];
+      }
+    }
+    return null;
+  }
+
+  Widget _videoPreview(Uri uri) {
+    final videoId = _youtubeVideoId(uri);
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Ui.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => _openExternalLink(uri.toString()),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (videoId != null)
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: Stack(
+                  fit: StackFit.expand,
+                  alignment: Alignment.center,
+                  children: [
+                    Image.network(
+                      'https://img.youtube.com/vi/$videoId/hqdefault.jpg',
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) => _videoPlaceholder(),
+                    ),
+                    const Center(
+                      child: Icon(
+                        Icons.play_circle_fill,
+                        color: Colors.white,
+                        size: 48,
+                        shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              _videoPlaceholder(),
+            Padding(
+              padding: const EdgeInsets.all(8),
+              child: Row(
+                children: [
+                  const Icon(Icons.ondemand_video, size: 16, color: Ui.blue),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      uri.toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 10, color: Ui.blue),
+                    ),
+                  ),
+                  const Text(
+                    'Buka video',
+                    style: TextStyle(fontSize: 9, color: Ui.muted),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _videoPlaceholder() => Container(
+    height: 110,
+    color: const Color(0xFFF1F5F9),
+    alignment: Alignment.center,
+    child: const Icon(Icons.play_circle_outline, size: 42, color: Ui.muted),
+  );
+
+  Widget _filePreview(String fileName) {
+    final extension = fileName.split('.').last.toUpperCase();
+    final fileSize = _pickedFile?.size;
+    final savedUrl = _pickedFile == null ? _existingFileUrl : null;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: Ui.line),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.description_outlined, color: Ui.greenDark, size: 24),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  [
+                    extension,
+                    if (fileSize != null) _formatFileSize(fileSize),
+                    if (savedUrl == null) 'Siap diunggah',
+                  ].join(' • '),
+                  style: const TextStyle(fontSize: 9, color: Ui.muted),
+                ),
+              ],
+            ),
+          ),
+          if (savedUrl != null)
+            TextButton(
+              onPressed: () => _openExternalLink(savedUrl),
+              child: const Text('Buka', style: TextStyle(fontSize: 10)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).ceil()} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  String _imageFileName(Uri uri, String? title) {
+    if (title != null && title.trim().isNotEmpty) return title.trim();
+    final pathName = uri.pathSegments.isEmpty
+        ? 'gambar'
+        : Uri.decodeComponent(uri.pathSegments.last);
+    return pathName.replaceFirst(RegExp(r'^\d+_'), '');
+  }
+
+  Widget _materialImagePreview(Uri uri, String? title, String? alt) {
+    final fileName = _imageFileName(uri, title);
+    final extension = fileName.contains('.')
+        ? fileName.split('.').last.toUpperCase()
+        : 'GAMBAR';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(6),
+          child: Image.network(
+            uri.toString(),
+            width: double.infinity,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => Container(
+              width: double.infinity,
+              height: 100,
+              color: const Color(0xFFF1F5F9),
+              alignment: Alignment.center,
+              child: const Text(
+                'Gambar tidak dapat dimuat',
+                style: TextStyle(fontSize: 10, color: Ui.muted),
+              ),
+            ),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '$fileName • $extension',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 9, color: Ui.muted),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Ganti gambar',
+                visualDensity: VisualDensity.compact,
+                iconSize: 16,
+                onPressed: _imageUploading ? null : () => _replaceImage(uri),
+                icon: const Icon(Icons.edit_outlined, color: Ui.blue),
+              ),
+              IconButton(
+                tooltip: 'Hapus gambar',
+                visualDensity: VisualDensity.compact,
+                iconSize: 16,
+                onPressed: () => _removeImage(uri),
+                icon: const Icon(Icons.delete_outline, color: Ui.red),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _removeImage(Uri uri) {
+    final match = _findImageMatch(uri);
+    if (match == null) return;
+    final updated = body.text.replaceRange(match.start, match.end, '');
+    body.value = TextEditingValue(
+      text: updated,
+      selection: TextSelection.collapsed(offset: match.start),
+    );
+  }
+
+  RegExpMatch? _findImageMatch(Uri uri) {
+    for (final match in _imageMarkdown.allMatches(body.text)) {
+      if (Uri.tryParse(match.group(2) ?? '') == uri) return match;
+    }
+    return null;
+  }
+
+  Future<({Uri uri, String name})?> _pickAndUploadImage() async {
+    if (_saving || _imageUploading) return null;
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.image,
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty) return null;
+
+      final image = result.files.first;
+      final extension = image.extension?.toLowerCase();
+      const contentTypes = {
+        'png': 'image/png',
+        'jpg': 'image/jpeg',
+        'jpeg': 'image/jpeg',
+        'gif': 'image/gif',
+        'webp': 'image/webp',
+        'bmp': 'image/bmp',
+      };
+      final contentType = contentTypes[extension];
+      if (contentType == null) {
+        _snack('Format gambar harus PNG, JPG, GIF, WEBP, atau BMP.');
+        return null;
+      }
+      if (image.size > _maxFileBytes) {
+        _snack('Ukuran gambar maksimal 100MB.');
+        return null;
+      }
+      final bytes = image.bytes;
+      if (bytes == null) {
+        _snack('Gambar tidak dapat dibaca. Coba pilih file lain.');
+        return null;
+      }
+      final uid = _db.auth.currentUser?.id;
+      if (uid == null || _courseId == null) {
+        _snack('Sesi login atau course tidak ditemukan.');
+        return null;
+      }
+
+      setState(() => _imageUploading = true);
+      final safeName = image.name.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+      final path =
+          '$uid/$_courseId/images/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+      await _db.storage
+          .from(_bucket)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType),
+          );
+      if (!mounted) return null;
+      return (
+        uri: Uri.parse(_db.storage.from(_bucket).getPublicUrl(path)),
+        name: image.name,
+      );
+    } catch (e) {
+      debugPrint('[TeacherMaterialForm] Gagal mengimpor gambar: $e');
+      _snack('Gagal mengimpor gambar: $e');
+      return null;
+    } finally {
+      if (mounted) setState(() => _imageUploading = false);
+    }
+  }
+
+  Future<void> _replaceImage(Uri currentImage) async {
+    final uploaded = await _pickAndUploadImage();
+    if (uploaded == null) return;
+    final match = _findImageMatch(currentImage);
+    if (match == null) {
+      _snack('Gambar yang akan diganti tidak ditemukan.');
+      return;
+    }
+    final safeTitle = uploaded.name.replaceAll('"', '_').replaceAll('\n', ' ');
+    final replacement =
+        '![${match.group(1) ?? ''}](${uploaded.uri} "$safeTitle")';
+    body.value = TextEditingValue(
+      text: body.text.replaceRange(match.start, match.end, replacement),
+      selection: TextSelection.collapsed(
+        offset: match.start + replacement.length,
+      ),
+    );
+    _bodyFocus.requestFocus();
+  }
+
   Future<Map<String, String>?> _uploadFile(String uid) async {
-    final f = _pickedFile;
-    if (f == null || f.bytes == null) return null;
-    final safeName = f.name.replaceAll(RegExp(r'[^\w\.\-]'), '_');
-    final path = '$uid/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-    await _db.storage.from(_bucket).uploadBinary(path, f.bytes!);
+    final file = _pickedFile;
+    if (file == null || file.bytes == null) return null;
+    final extension = file.extension?.toLowerCase();
+    final contentType = switch (extension) {
+      'pdf' => 'application/pdf',
+      'doc' => 'application/msword',
+      'docx' =>
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      _ => throw StateError('Format file materi tidak didukung.'),
+    };
+    final safeName = file.name.replaceAll(RegExp(r'[^\w\.\-]'), '_');
+    final path =
+        '$uid/$_courseId/files/${DateTime.now().millisecondsSinceEpoch}_$safeName';
+    await _db.storage
+        .from(_bucket)
+        .uploadBinary(
+          path,
+          file.bytes!,
+          fileOptions: FileOptions(contentType: contentType),
+        );
     return {
       'url': _db.storage.from(_bucket).getPublicUrl(path),
-      'name': f.name,
+      'name': file.name,
     };
   }
 
@@ -181,7 +555,6 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
       return _snack('Deskripsi materi wajib diisi.');
     }
     if (body.text.trim().isEmpty) return _snack('Isi materi wajib diisi.');
-
     final uid = _db.auth.currentUser?.id;
     if (uid == null) return _snack('Sesi login tidak ditemukan.');
 
@@ -195,7 +568,6 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
         'description': desc.text.trim(),
         'content': body.text.trim(),
         'video_url': link.text.trim().isEmpty ? null : link.text.trim(),
-        // file baru > file lama > dihapus
         'file_url': uploaded?['url'] ?? _existingFileUrl,
         'file_name': uploaded?['name'] ?? _existingFileName,
       };
@@ -241,7 +613,10 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
     final s = body.selection;
     final len = body.text.length;
     if (!s.isValid) return (start: len, end: len);
-    return (start: s.start.clamp(0, len), end: s.end.clamp(0, len));
+    return (
+      start: s.start.clamp(0, len).toInt(),
+      end: s.end.clamp(0, len).toInt(),
+    );
   }
 
   /// Bungkus teks terpilih, mis. **teks**.
@@ -260,28 +635,71 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
     _bodyFocus.requestFocus();
   }
 
-  /// Awali setiap baris terpilih dengan "- " atau "1. ".
+  /// Convert list prefixes on the selected lines to the chosen list type.
   void _prefixLines({required bool numbered}) {
-    final (:start, :end) = _sel;
+    final (:start, end: selectedEnd) = _sel;
     final text = body.text;
     final lineStart = start == 0 ? 0 : text.lastIndexOf('\n', start - 1) + 1;
-    final block = text.substring(lineStart, end);
+    final end =
+        selectedEnd > start &&
+            selectedEnd <= text.length &&
+            text[selectedEnd - 1] == '\n'
+        ? selectedEnd - 1
+        : selectedEnd;
+    final nextLineStart = text.indexOf('\n', end);
+    final lineEnd = nextLineStart == -1 ? text.length : nextLineStart;
+    final block = text.substring(lineStart, lineEnd);
     final lines = block.split('\n');
     final out = <String>[];
+    final oldPrefixLengths = <int>[];
+    final newPrefixLengths = <int>[];
     for (var i = 0; i < lines.length; i++) {
-      out.add('${numbered ? '${i + 1}. ' : '- '}${lines[i]}');
+      final line = lines[i];
+      final indentation = RegExp(r'^[ \t]*').firstMatch(line)!.group(0)!;
+      final oldListPrefix = RegExp(
+        r'^[ \t]*(?:[-*+]|\d+\.)[ \t]+',
+      ).firstMatch(line)?.group(0);
+      final content = oldListPrefix == null
+          ? line.substring(indentation.length)
+          : line.substring(oldListPrefix.length);
+      final prefix = '$indentation${numbered ? '${i + 1}. ' : '- '}';
+      out.add('$prefix$content');
+      oldPrefixLengths.add(oldListPrefix?.length ?? indentation.length);
+      newPrefixLengths.add(prefix.length);
     }
     final newBlock = out.join('\n');
+
+    int adjustOffset(int offset) {
+      var lineOffset = 0;
+      var accumulatedDelta = 0;
+      for (var i = 0; i < lines.length; i++) {
+        final originalLineStart = lineStart + lineOffset;
+        if (offset < originalLineStart) break;
+        final oldPrefixEnd = originalLineStart + oldPrefixLengths[i];
+        final newPrefixEnd =
+            originalLineStart + accumulatedDelta + newPrefixLengths[i];
+        if (offset <= oldPrefixEnd) return newPrefixEnd;
+        accumulatedDelta += newPrefixLengths[i] - oldPrefixLengths[i];
+        lineOffset += lines[i].length + 1;
+      }
+      return offset + accumulatedDelta;
+    }
+
+    final adjustedStart = adjustOffset(start);
+    final adjustedEnd = adjustOffset(selectedEnd);
     body.value = TextEditingValue(
-      text: text.replaceRange(lineStart, end, newBlock),
-      selection: TextSelection.collapsed(offset: lineStart + newBlock.length),
+      text: text.replaceRange(lineStart, lineEnd, newBlock),
+      selection: TextSelection(
+        baseOffset: adjustedStart,
+        extentOffset: adjustedEnd,
+      ),
     );
     _bodyFocus.requestFocus();
   }
 
-  Future<String?> _askUrl(String label) {
+  Future<String?> _askUrl(String label) async {
     final c = TextEditingController();
-    return showDialog<String>(
+    final result = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(label, style: const TextStyle(fontSize: 14)),
@@ -303,39 +721,71 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
         ],
       ),
     );
+    c.dispose();
+    return result;
   }
 
   Future<void> _insertLink() async {
     final (:start, :end) = _sel;
     final selected = body.text.substring(start, end);
     final url = await _askUrl('Masukkan link');
-    if (url == null || url.isEmpty) return;
+    if (url == null || url.trim().isEmpty) return;
+    final value = url.trim();
+    final normalizedUrl = value.contains('://') ? value : 'https://$value';
+    final uri = Uri.tryParse(normalizedUrl);
+    if (uri == null ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      _snack('Masukkan alamat link yang valid.');
+      return;
+    }
+    final label = selected.isEmpty ? normalizedUrl : selected;
     _wrapWith(
-      '[${selected.isEmpty ? 'teks link' : selected}]($url)',
+      '[$label]($normalizedUrl)',
       start,
       end,
+      visibleStart: 1,
+      visibleLength: label.length,
     );
   }
 
   Future<void> _insertImage() async {
+    if (_saving || _imageUploading) return;
     final (:start, :end) = _sel;
-    final url = await _askUrl('Masukkan link gambar');
-    if (url == null || url.isEmpty) return;
-    _wrapWith('![gambar]($url)', start, end);
+    final selected = body.text.substring(start, end);
+    final uploaded = await _pickAndUploadImage();
+    if (uploaded == null) return;
+    final safeTitle = uploaded.name.replaceAll('"', '_').replaceAll('\n', ' ');
+    _wrapWith(
+      '![$selected](${uploaded.uri} "$safeTitle")',
+      start,
+      end,
+      visibleStart: 2,
+      visibleLength: selected.length,
+    );
   }
 
-  void _wrapWith(String replacement, int start, int end) {
+  void _wrapWith(
+    String replacement,
+    int start,
+    int end, {
+    required int visibleStart,
+    required int visibleLength,
+  }) {
     final text = body.text;
-    final s = start.clamp(0, text.length);
-    final e = end.clamp(0, text.length);
+    final s = start.clamp(0, text.length).toInt();
+    final e = end.clamp(0, text.length).toInt();
     body.value = TextEditingValue(
       text: text.replaceRange(s, e, replacement),
-      selection: TextSelection.collapsed(offset: s + replacement.length),
+      selection: TextSelection(
+        baseOffset: s + visibleStart,
+        extentOffset: s + visibleStart + visibleLength,
+      ),
     );
     _bodyFocus.requestFocus();
   }
 
-  Widget _tool(Widget child, String tip, VoidCallback onTap) => Tooltip(
+  Widget _tool(Widget child, String tip, VoidCallback? onTap) => Tooltip(
     message: tip,
     child: InkWell(
       onTap: onTap,
@@ -462,9 +912,17 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
                       _insertLink,
                     ),
                     _tool(
-                      const Icon(Icons.image_outlined, size: 14),
-                      'Sisipkan gambar (link)',
-                      _insertImage,
+                      Icon(
+                        Icons.image_outlined,
+                        size: 14,
+                        color: (_imageUploading || _imagePresent)
+                            ? Ui.muted
+                            : Ui.text,
+                      ),
+                      _imagePresent
+                          ? 'Hapus atau ganti gambar melalui pratinjau'
+                          : 'Import gambar',
+                      (_imageUploading || _imagePresent) ? null : _insertImage,
                     ),
                   ],
                 ),
@@ -484,6 +942,32 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
               ),
             ],
           ),
+        ),
+        AnimatedBuilder(
+          animation: body,
+          builder: (context, _) {
+            if (body.text.trim().isEmpty) return const SizedBox.shrink();
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const FieldLabel('Pratinjau Isi Materi'),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    border: Border.all(color: Ui.line),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: MaterialMarkdown(
+                    data: body.text,
+                    fontSize: 11,
+                    imageBuilder: _materialImagePreview,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
         const FieldLabel('File Materi'),
         InkWell(
@@ -515,34 +999,22 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (fileName == null)
-                        const Text.rich(
-                          TextSpan(
-                            text: 'Pilih file',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: Ui.blue,
-                            ),
-                            children: [
-                              TextSpan(
-                                text: ' atau klik untuk upload',
-                                style: TextStyle(color: Ui.text),
-                              ),
-                            ],
-                          ),
-                        )
-                      else
-                        Text(
-                          fileName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                      const Text.rich(
+                        TextSpan(
+                          text: 'Pilih file',
+                          style: TextStyle(
                             fontSize: 9,
                             fontWeight: FontWeight.w700,
-                            color: Ui.text,
+                            color: Ui.blue,
                           ),
+                          children: [
+                            TextSpan(
+                              text: ' atau klik untuk upload',
+                              style: TextStyle(color: Ui.text),
+                            ),
+                          ],
                         ),
+                      ),
                       const Text(
                         'Format: PDF, DOC, DOCX | Maks: 100MB',
                         style: TextStyle(fontSize: 7.5, color: Ui.muted),
@@ -562,11 +1034,20 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
             ),
           ),
         ),
+        if (fileName != null) _filePreview(fileName),
         const FieldLabel('Link Video (Opsional)'),
         EduField(
           hint: 'Masukkan link video youtube dll',
           controller: link,
           prefix: const Icon(Icons.link, size: 15),
+        ),
+        AnimatedBuilder(
+          animation: link,
+          builder: (context, _) {
+            final uri = _videoUri;
+            if (uri == null) return const SizedBox.shrink();
+            return _videoPreview(uri);
+          },
         ),
         const SizedBox(height: 16),
         SolidBtn(

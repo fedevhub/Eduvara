@@ -5,25 +5,19 @@ import '../../../core/routes/route_names.dart';
 
 class _ResultData {
   final int score;
-  final int maxScore;
   final int correct;
   final int wrong;
   final int passingScore;
   final dynamic courseId;
   const _ResultData(
     this.score,
-    this.maxScore,
     this.correct,
     this.wrong,
     this.passingScore,
     this.courseId,
   );
 
-  bool get passed {
-    if (maxScore <= 0) return score >= passingScore;
-    final needed = ((maxScore * passingScore) / 100).ceil();
-    return score >= needed;
-  }
+  bool get passed => score >= passingScore;
 }
 
 class QuizResultPage extends StatefulWidget {
@@ -55,10 +49,6 @@ class _QuizResultPageState extends State<QuizResultPage> {
     if (_attemptId != null) _result = _load();
   }
 
-  bool _isMissingTableError(PostgrestException e) =>
-      e.code == 'PGRST205' ||
-      e.message.toLowerCase().contains('could not find the table');
-
   Future<_ResultData> _load() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) throw 'Sesi login berakhir, silakan login ulang';
@@ -66,44 +56,24 @@ class _QuizResultPageState extends State<QuizResultPage> {
     try {
       final row = await _db
           .from('quiz_attempts')
-          .select('score, correct_count, wrong_count, quiz_id')
+          .select(
+            'score, correct_count, wrong_count, quizzes(course_id, passing_score)',
+          )
           .eq('id', _attemptId!)
           .eq('user_id', uid)
           .single();
 
-      final quizId = row['quiz_id']?.toString();
-      if (quizId == null || quizId.isEmpty) {
-        return const _ResultData(0, 0, 0, 0, 80, null);
-      }
-
-      final quiz = await _db
-          .from('quizzes')
-          .select('course_id, passing_score')
-          .eq('id', quizId)
-          .maybeSingle();
-
-      final rawScore = (row['score'] as num?)?.toInt() ?? 0;
-      final passingScore = (quiz?['passing_score'] as num?)?.toInt() ?? 80;
-      final maxScoreRows = await _db
-          .from('quiz_questions')
-          .select('points')
-          .eq('quiz_id', quizId);
-      final maxScore = maxScoreRows.fold<int>(
-        0,
-        (total, item) => total + ((item['points'] as num?)?.toInt() ?? 0),
-      );
-
+      final quiz = row['quizzes'] as Map?;
       return _ResultData(
-        rawScore,
-        maxScore,
+        (row['score'] as num?)?.round() ?? 0,
         (row['correct_count'] as num?)?.toInt() ?? 0,
         (row['wrong_count'] as num?)?.toInt() ?? 0,
-        passingScore,
+        (quiz?['passing_score'] as num?)?.toInt() ?? 80,
         quiz?['course_id'],
       );
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
-      return const _ResultData(0, 0, 0, 0, 80, null);
+      return const _ResultData(0, 0, 0, 80, null);
     }
   }
 
@@ -170,7 +140,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                     ),
                   ),
                   const Text(
-                    'Poin',
+                    'Dari 100 Poin',
                     style: TextStyle(fontSize: 7, color: Colors.white),
                   ),
                 ],

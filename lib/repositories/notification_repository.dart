@@ -6,54 +6,40 @@ class NotificationRepository {
   final SupabaseClient _db = Supabase.instance.client;
 
   Future<List<NotificationModel>> getNotifications() async {
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) {
+      throw const AuthException('Sesi login tidak ditemukan.');
+    }
+
     final rows = await _db
-        .from('activity_logs')
-        .select(
-          'id, actor_role, actor_name, action, entity, entity_name, is_read, created_at',
-        )
-        .inFilter('actor_role', ['teacher', 'student'])
+        .from('notifications')
+        .select('id, title, message, is_read, created_at')
+        .eq('user_id', userId)
         .order('created_at', ascending: false)
         .limit(100);
 
-    final activities = List<Map<String, dynamic>>.from(rows);
-    final unreadIds = activities
-        .where((activity) => activity['is_read'] != true)
-        .map((activity) => activity['id'])
+    final notifications = List<Map<String, dynamic>>.from(rows);
+    final unreadIds = notifications
+        .where((notification) => notification['is_read'] != true)
+        .map((notification) => notification['id'])
         .toList();
 
     if (unreadIds.isNotEmpty) {
       await _db
-          .from('activity_logs')
+          .from('notifications')
           .update({'is_read': true})
+          .eq('user_id', userId)
           .inFilter('id', unreadIds);
     }
 
-    return activities.map((activity) {
-      final role = activity['actor_role']?.toString() ?? 'user';
-      final actor = activity['actor_name']?.toString() ?? 'Pengguna';
-      final action = activity['action']?.toString() ?? '';
-      final entity = activity['entity']?.toString() ?? 'aktivitas';
-      final entityLabel = switch (entity) {
-        'material' => 'materi',
-        _ => entity,
-      };
-      final name = activity['entity_name']?.toString() ?? entity;
-      final verb = switch (action) {
-        'insert' => 'menambahkan',
-        'update' => 'memperbarui',
-        'delete' => 'menghapus',
-        'complete' => 'menyelesaikan',
-        'submit' => 'mengumpulkan',
-        _ => 'melakukan aktivitas pada',
-      };
+    return notifications.map((notification) {
       final createdAt = DateTime.tryParse(
-        activity['created_at']?.toString() ?? '',
+        notification['created_at']?.toString() ?? '',
       )?.toLocal();
-
       return NotificationModel(
-        id: activity['id'].toString(),
-        title: role == 'teacher' ? 'Aktivitas Teacher' : 'Aktivitas Siswa',
-        message: '$actor $verb $entityLabel "$name".',
+        id: notification['id'].toString(),
+        title: notification['title']?.toString() ?? '-',
+        message: notification['message']?.toString() ?? '',
         date: _formatDate(createdAt),
         read: true,
       );

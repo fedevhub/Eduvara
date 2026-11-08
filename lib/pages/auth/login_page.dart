@@ -92,153 +92,183 @@ class _LoginPageState extends State<LoginPage> {
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 400),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Image.asset('assets/images/logo-text.png', width: 150),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Learn • Grow • Achieve',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: Ui.navy,
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('assets/images/logo-text.png', width: 150),
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Learn • Grow • Achieve',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Ui.navy,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 26),
-                  Container(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(28),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Center(
-                          child: Text(
-                            'Login',
+                    const SizedBox(height: 26),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 22),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Center(
+                            child: Text(
+                              'Login',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Email',
                             style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Email',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        _fieldBox(
-                          icon: Icons.mail,
-                          child: TextField(
-                            controller: email,
-                            keyboardType: TextInputType.emailAddress,
-                            style: const TextStyle(fontSize: 11),
-                            decoration: const InputDecoration(
-                              isCollapsed: true,
-                              border: InputBorder.none,
-                              hintText: 'admin@gmail.com',
-                              hintStyle: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF9AA5B5),
+                          const SizedBox(height: 5),
+                          _fieldBox(
+                            icon: Icons.mail,
+                            child: TextField(
+                              controller: email,
+                              keyboardType: TextInputType.emailAddress,
+                              style: const TextStyle(fontSize: 11),
+                              decoration: const InputDecoration(
+                                isCollapsed: true,
+                                border: InputBorder.none,
+                                hintText: 'admin@gmail.com',
+                                hintStyle: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF9AA5B5),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Password',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                          const SizedBox(height: 12),
+                          const Text(
+                            'Password',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 5),
-                        _fieldBox(
-                          icon: Icons.lock,
-                          child: TextField(
-                            controller: password,
-                            obscureText: hidden,
-                            style: const TextStyle(fontSize: 11),
-                            decoration: const InputDecoration(
-                              isCollapsed: true,
-                              border: InputBorder.none,
-                              hintText: '••••••••••',
-                              hintStyle: TextStyle(
-                                fontSize: 11,
-                                color: Color(0xFF9AA5B5),
+                          const SizedBox(height: 5),
+                          _fieldBox(
+                            icon: Icons.lock,
+                            child: TextField(
+                              controller: password,
+                              obscureText: hidden,
+                              style: const TextStyle(fontSize: 11),
+                              decoration: const InputDecoration(
+                                isCollapsed: true,
+                                border: InputBorder.none,
+                                hintText: '••••••••••',
+                                hintStyle: TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF9AA5B5),
+                                ),
+                              ),
+                            ),
+                            end: GestureDetector(
+                              onTap: () => setState(() => hidden = !hidden),
+                              child: Icon(
+                                hidden
+                                    ? Icons.visibility_off_outlined
+                                    : Icons.visibility_outlined,
+                                size: 16,
+                                color: Ui.muted,
                               ),
                             ),
                           ),
-                          end: GestureDetector(
-                            onTap: () => setState(() => hidden = !hidden),
-                            child: Icon(
-                              hidden
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                              size: 16,
-                              color: Ui.muted,
+                          const SizedBox(height: 10),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final checkbox = SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: Checkbox(
+                                  value: remember,
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  onChanged: (v) =>
+                                      setState(() => remember = v ?? false),
+                                ),
+                              );
+                              const rememberLabel = Text(
+                                'Remember me',
+                                style: TextStyle(fontSize: 9),
+                              );
+                              const forgotLabel = Text(
+                                'Forget your password?',
+                                style: TextStyle(fontSize: 9),
+                              );
+
+                              if (constraints.maxWidth < 260) {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        checkbox,
+                                        const SizedBox(width: 6),
+                                        const Expanded(child: rememberLabel),
+                                      ],
+                                    ),
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: forgotLabel,
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return Row(
+                                children: [
+                                  checkbox,
+                                  const SizedBox(width: 6),
+                                  rememberLabel,
+                                  const Spacer(),
+                                  forgotLabel,
+                                ],
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          Consumer<AuthProvider>(
+                            builder: (_, auth, __) => SolidBtn(
+                              label: auth.loading ? 'Memproses...' : 'Login',
+                              height: 38,
+                              radius: 8,
+                              onTap: auth.loading ? null : () => _submit(auth),
                             ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: Checkbox(
-                                value: remember,
-                                visualDensity: VisualDensity.compact,
-                                materialTapTargetSize:
-                                    MaterialTapTargetSize.shrinkWrap,
-                                onChanged: (v) =>
-                                    setState(() => remember = v ?? false),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            const Text(
-                              'Remember me',
-                              style: TextStyle(fontSize: 9),
-                            ),
-                            const Spacer(),
-                            const Text(
-                              'Forget your password?',
-                              style: TextStyle(fontSize: 9),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 14),
-                        Consumer<AuthProvider>(
-                          builder: (_, auth, __) => SolidBtn(
-                            label: auth.loading ? 'Memproses...' : 'Login',
-                            height: 38,
-                            radius: 8,
-                            onTap: auth.loading ? null : () => _submit(auth),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text.rich(
-                    TextSpan(
-                      text: 'Dengan masuk, kamu menyetujui ',
-                      style: TextStyle(fontSize: 9, color: Colors.white),
-                      children: [
-                        TextSpan(
-                          text: 'Syarat & Ketentuan',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ],
+                    const SizedBox(height: 18),
+                    const Text.rich(
+                      TextSpan(
+                        text: 'Dengan masuk, kamu menyetujui ',
+                        style: TextStyle(fontSize: 9, color: Colors.white),
+                        children: [
+                          TextSpan(
+                            text: 'Syarat & Ketentuan',
+                            style: TextStyle(fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

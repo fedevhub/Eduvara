@@ -5,11 +5,10 @@ import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 
 class _Soal {
+  final String id;
   final String q;
   final List<String> options;
-  final int correctOption;
-  final int points;
-  const _Soal(this.q, this.options, this.correctOption, this.points);
+  const _Soal(this.id, this.q, this.options);
 }
 
 class QuestionPage extends StatefulWidget {
@@ -62,26 +61,19 @@ class _QuestionPageState extends State<QuestionPage> {
           .select('title, duration_minutes')
           .eq('id', quizId)
           .single();
-      final rows = await _db
-          .from('quiz_questions')
-          .select(
-            'question, option_a, option_b, option_c, option_d, correct_option, points',
-          )
-          .eq('quiz_id', quizId)
-          .order('id');
+      final rows = await _db.rpc(
+        'get_student_quiz_questions',
+        params: {'p_quiz_id': quizId},
+      );
       final questions = List<Map<String, dynamic>>.from(rows)
           .map(
-            (row) => _Soal(
-              row['question']?.toString() ?? '',
-              [
-                row['option_a']?.toString() ?? '',
-                row['option_b']?.toString() ?? '',
-                row['option_c']?.toString() ?? '',
-                row['option_d']?.toString() ?? '',
-              ],
-              (row['correct_option'] as num?)?.toInt() ?? 0,
-              (row['points'] as num?)?.toInt() ?? 1,
-            ),
+            (row) =>
+                _Soal(row['id'].toString(), row['question']?.toString() ?? '', [
+                  row['option_a']?.toString() ?? '',
+                  row['option_b']?.toString() ?? '',
+                  row['option_c']?.toString() ?? '',
+                  row['option_d']?.toString() ?? '',
+                ]),
           )
           .toList();
       if (questions.isEmpty) {
@@ -186,57 +178,27 @@ class _QuestionPageState extends State<QuestionPage> {
         }
       }
       final wrong = _soal.length - correct;
-      final score = totalPoints == 0 ? 0 : earnedPoints;
-      final submittedAnswers = {
-        for (final entry in answers.entries) entry.key.toString(): entry.value,
-      };
-      final submittedAt = DateTime.now().toUtc().toIso8601String();
-      final existing = await _db
+      final score = totalPoints == 0
+          ? 0
+          : (earnedPoints / totalPoints * 100).round();
+      final attempt = await _db
           .from('quiz_attempts')
+          .insert({
+            'user_id': userId,
+            'quiz_id': quizId,
+            'score': score,
+            'correct_count': correct,
+            'wrong_count': wrong,
+            'completed': true,
+          })
           .select('id')
-          .eq('user_id', userId)
-          .eq('quiz_id', quizId)
-          .order('created_at', ascending: false)
-          .limit(1)
-          .maybeSingle();
-
-      final Map<String, dynamic> attempt;
-      if (existing == null) {
-        attempt = await _db
-            .from('quiz_attempts')
-            .insert({
-              'user_id': userId,
-              'quiz_id': quizId,
-              'score': score,
-              'correct_count': correct,
-              'wrong_count': wrong,
-              'answers': submittedAnswers,
-              'completed': true,
-              'created_at': submittedAt,
-            })
-            .select('id')
-            .single();
-      } else {
-        attempt = await _db
-            .from('quiz_attempts')
-            .update({
-              'score': score,
-              'correct_count': correct,
-              'wrong_count': wrong,
-              'answers': submittedAnswers,
-              'completed': true,
-              'created_at': submittedAt,
-            })
-            .eq('id', existing['id'])
-            .select('id')
-            .single();
-      }
+          .single();
 
       if (mounted) {
         Navigator.pushReplacementNamed(
           context,
           RouteNames.studentQuizResult,
-          arguments: {'attempt_id': attempt['id'], 'entity_name': quizTitle},
+          arguments: {'attempt_id': attemptId, 'entity_name': quizTitle},
         );
       }
     } catch (e) {

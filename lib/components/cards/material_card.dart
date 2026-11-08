@@ -5,7 +5,13 @@ import '../../core/constants/app_colors.dart';
 class MaterialCard extends StatelessWidget {
   final Materi material;
   final VoidCallback? onTap;
-  const MaterialCard({super.key, required this.material, this.onTap});
+  final Widget? trailing;
+  const MaterialCard({
+    super.key,
+    required this.material,
+    this.onTap,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -28,6 +34,6 @@ class MaterialCard extends StatelessWidget {
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     ),
-    trailing: const Icon(Icons.chevron_right),
+    trailing: trailing ?? const Icon(Icons.chevron_right),
   );
 }
