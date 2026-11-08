@@ -27,6 +27,14 @@ class _SplashPageState extends State<SplashPage> {
       await auth.restoreSession();
 
       if (!mounted) return;
+      if (auth.recoveryPending) {
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          RouteNames.login,
+          (route) => false,
+        );
+        return;
+      }
 
       final user = auth.user;
       final destination = user == null

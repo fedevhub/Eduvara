@@ -86,9 +86,8 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final rows = await _db
           .from('notifications')
           .select('id')
-          .or('user_id.eq.${user.id},user_id.is.null')
-          .eq('is_read', false)
-          .limit(99);
+          .eq('user_id', user.id)
+          .eq('is_read', false);
       _unreadNotifications = List<Map<String, dynamic>>.from(rows).length;
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) {

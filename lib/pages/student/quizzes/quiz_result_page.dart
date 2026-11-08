@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
+import '../../../core/utils/quiz_score.dart';
 import '../../../core/routes/route_names.dart';
 
 class _ResultData {
@@ -68,7 +69,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
       final row = await _db
           .from('quiz_attempts')
           .select(
-            'score, total_points, correct_count, wrong_count, quizzes(course_id, passing_score)',
+            'score, total_points, correct_count, wrong_count, quizzes(id, course_id, passing_score)',
           )
           .eq('id', _attemptId!)
           .eq('user_id', uid)
@@ -76,7 +77,19 @@ class _QuizResultPageState extends State<QuizResultPage> {
 
       final quiz = row['quizzes'] as Map?;
       final score = (row['score'] as num?)?.round() ?? 0;
-      final totalPoints = (row['total_points'] as num?)?.round() ?? 0;
+      final quizId = quiz?['id']?.toString();
+      var totalPoints = (row['total_points'] as num?)?.round() ?? 0;
+      if (totalPoints <= 0 && quizId != null) {
+        final questionRows = await _db.rpc(
+          'get_student_quiz_questions',
+          params: {'p_quiz_id': quizId},
+        );
+        final questions = List<Map<String, dynamic>>.from(questionRows);
+        totalPoints = questions.fold<int>(0, (total, question) {
+          final points = question['points'];
+          return total + (points is num ? points.round() : 0);
+        });
+      }
       return _ResultData(
         score,
         totalPoints,
@@ -146,7 +159,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '${d.score}/${d.maxScore}',
+                    formatQuizScore(d.score, d.maxScore),
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,

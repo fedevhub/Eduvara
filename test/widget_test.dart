@@ -7,11 +7,21 @@
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:eduvara/app.dart';
 import 'package:eduvara/core/routes/route_names.dart';
 
 void main() {
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await Supabase.initialize(
+      url: 'http://localhost:54321',
+      publishableKey: 'test-publishable-key',
+    );
+  });
+
   testWidgets('Eduvara starts on the splash screen', (
     WidgetTester tester,
   ) async {
@@ -21,9 +31,11 @@ void main() {
     expect(find.byType(Image), findsOneWidget);
   });
 
-  test('student role resolves to the student dashboard route', () {
+  test('roles resolve to their matching dashboard routes', () {
     expect(RouteNames.dashboardForRole('student'), RouteNames.studentDashboard);
     expect(RouteNames.dashboardForRole('Student'), RouteNames.studentDashboard);
     expect(RouteNames.dashboardForRole('STUDENT'), RouteNames.studentDashboard);
+    expect(RouteNames.dashboardForRole('admin'), RouteNames.adminDashboard);
+    expect(RouteNames.dashboardForRole('ADMIN'), RouteNames.adminDashboard);
   });
 }

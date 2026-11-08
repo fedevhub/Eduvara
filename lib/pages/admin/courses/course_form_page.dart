@@ -62,6 +62,17 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   List<Map<String, dynamic>> get availableStudents => _students;
 
+  bool _isActiveAccount(Map<String, dynamic>? account) {
+    final status = account?['status'];
+    if (status == null) return true;
+    return const {
+      'active',
+      'aktif',
+      'true',
+      '1',
+    }.contains(status.toString().trim().toLowerCase());
+  }
+
   List<Map<String, dynamic>> get filteredStudents {
     final query = _studentQuery.trim().toLowerCase();
 
@@ -122,11 +133,14 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
             .order('full_name'),
       );
       final userRows = List<Map<String, dynamic>>.from(
-        await _db.from('user').select('id_user, nama_lengkap, kelas'),
+        await _db.from('user').select('id_user, nama_lengkap, kelas, status'),
       );
       final userDetails = {
         for (final row in userRows) row['id_user'].toString(): row,
       };
+      final activeProfiles = profiles.where((row) {
+        return _isActiveAccount(userDetails[row['id'].toString()]);
+      }).toList();
 
       final subjects = List<String>.of(_baseSubjects);
       final levels = List<String>.of(_baseLevels);
@@ -147,11 +161,11 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
       if (!mounted) return;
 
       setState(() {
-        _teachers = profiles
+        _teachers = activeProfiles
             .where((row) => (row['role'] ?? '').toString() == 'teacher')
             .toList();
 
-        _students = profiles
+        _students = activeProfiles
             .where((row) => (row['role'] ?? '').toString() == 'student')
             .map((row) {
               final details = userDetails[row['id'].toString()];

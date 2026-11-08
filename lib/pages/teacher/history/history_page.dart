@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
+import '../../../core/utils/quiz_score.dart';
 
 class TeacherHistoryPage extends StatefulWidget {
   const TeacherHistoryPage({super.key});
@@ -36,6 +37,17 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
     if (courseTitles.isEmpty) return const [];
 
     final courseIds = courseTitles.keys.toList();
+    final enrollmentRows = await _db
+        .from('enrollments')
+        .select('course_id, student_id')
+        .inFilter('course_id', courseIds);
+    final enrolledStudentsByCourse = <String, Set<String>>{};
+    for (final enrollment in enrollmentRows) {
+      enrolledStudentsByCourse
+          .putIfAbsent(enrollment['course_id'].toString(), () => <String>{})
+          .add(enrollment['student_id'].toString());
+    }
+
     final quizRows = await _db
         .from('quizzes')
         .select('id, course_id, title')
@@ -53,6 +65,25 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
     };
     final quizIds = quizById.keys.toList();
     final materialIds = materialById.keys.toList();
+
+    final questionPointsByQuiz = <String, num>{};
+    if (quizIds.isNotEmpty) {
+      final questionRows = await _db
+          .from('quiz_questions')
+          .select('quiz_id, points')
+          .inFilter('quiz_id', quizIds);
+      for (final question in questionRows) {
+        final quizId = question['quiz_id']?.toString();
+        final points = question['points'];
+        if (quizId != null && points is num) {
+          questionPointsByQuiz.update(
+            quizId,
+            (total) => total + points,
+            ifAbsent: () => points,
+          );
+        }
+      }
+    }
 
     final attempts = quizIds.isEmpty
         ? <Map<String, dynamic>>[]
@@ -95,22 +126,35 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
     for (final row in attempts) {
       final quiz = quizById[row['quiz_id'].toString()];
       if (quiz == null) continue;
+      final courseId = quiz['course_id'].toString();
+      final studentId = row['user_id'].toString();
+      if (enrolledStudentsByCourse[courseId]?.contains(studentId) != true) {
+        continue;
+      }
       result.add({
-        'course': courseTitles[quiz['course_id'].toString()] ?? '-',
+        'course': courseTitles[courseId] ?? '-',
         'activity': 'Quiz: ${quiz['title'] ?? '-'}',
-        'student': studentNames[row['user_id'].toString()] ?? 'Siswa',
+        'student': studentNames[studentId] ?? 'Siswa',
         'score': row['score'],
-        'total_points': row['total_points'],
+        'total_points': effectiveQuizTotalPoints(
+          row['total_points'],
+          questionPointsByQuiz[row['quiz_id'].toString()],
+        ),
         'created_at': row['created_at'],
       });
     }
     for (final row in progress) {
       final material = materialById[row['material_id'].toString()];
       if (material == null) continue;
+      final courseId = material['course_id'].toString();
+      final studentId = row['user_id'].toString();
+      if (enrolledStudentsByCourse[courseId]?.contains(studentId) != true) {
+        continue;
+      }
       result.add({
-        'course': courseTitles[material['course_id'].toString()] ?? '-',
+        'course': courseTitles[courseId] ?? '-',
         'activity': 'Materi: ${material['title'] ?? '-'}',
-        'student': studentNames[row['user_id'].toString()] ?? 'Siswa',
+        'student': studentNames[studentId] ?? 'Siswa',
         'score': null,
         'created_at': row['completed_at'] ?? row['created_at'],
       });
@@ -150,9 +194,7 @@ class _TeacherHistoryPageState extends State<TeacherHistoryPage> {
   Widget _activityCard(Map<String, dynamic> item, DateTime? date) {
     final score = item['score'];
     final totalPoints = item['total_points'];
-    final scoreText = score is num && totalPoints is num
-        ? '${score.round()}/${totalPoints.round()}'
-        : score?.toString() ?? '';
+    final scoreText = formatQuizScore(score, totalPoints);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: EduCard(
