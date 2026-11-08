@@ -95,7 +95,6 @@ class _QuizPageState extends State<QuizPage> {
       }
 
       final quiz = snapshot.data!;
-      final completed = quiz['completed'] == true;
       final arguments = {..._arguments, ...quiz, 'entity_name': quiz['title']};
       return EduScaffold(
         body: Column(
@@ -163,8 +162,8 @@ class _QuizPageState extends State<QuizPage> {
                 ),
               ),
             ),
-          );
-        },
+          ],
+        ),
       );
     },
   );

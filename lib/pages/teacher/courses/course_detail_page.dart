@@ -417,7 +417,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 () => Navigator.pushNamed(
                   context,
                   RouteNames.teacherMaterialDetail,
-                  arguments: {'id': m['id']},
+                  arguments: {'id': _materials[i]['id']},
                 ),
               ),
               _iconBtn(
@@ -430,7 +430,11 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.delete_outline,
                 Ui.redSoft,
                 Ui.red,
-                () => _delete(what: 'Materi', table: _matTable, id: m['id']),
+                () => _delete(
+                  what: 'Materi',
+                  table: 'materials',
+                  id: _materials[i]['id'],
+                ),
               ),
             ],
           ),
@@ -484,7 +488,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 () => Navigator.pushNamed(
                   context,
                   RouteNames.teacherQuizDetail,
-                  arguments: {'id': q['id']},
+                  arguments: {'id': _quizzes[i]['id']},
                 ),
               ),
               _iconBtn(
@@ -507,7 +511,11 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
                 Icons.delete_outline,
                 Ui.redSoft,
                 Ui.red,
-                () => _delete(what: 'Quiz', table: _quizTable, id: q['id']),
+                () => _delete(
+                  what: 'Quiz',
+                  table: 'quizzes',
+                  id: _quizzes[i]['id'],
+                ),
               ),
             ],
           ),

@@ -165,40 +165,24 @@ class _QuestionPageState extends State<QuestionPage> {
         throw Exception('Sesi login berakhir, silakan login ulang.');
       }
 
-      var correct = 0;
-      var earnedPoints = 0;
-      final totalPoints = _soal.fold<int>(
-        0,
-        (total, question) => total + question.points,
+      final submittedAnswers = <Map<String, dynamic>>[
+        for (var i = 0; i < _soal.length; i++)
+          if (answers[i] != null)
+            {'question_id': _soal[i].id, 'selected_option': answers[i]},
+      ];
+      final attemptId = await _db.rpc(
+        'submit_quiz_attempt',
+        params: {'p_quiz_id': quizId, 'p_answers': submittedAnswers},
       );
-      for (var i = 0; i < _soal.length; i++) {
-        if (answers[i] == _soal[i].correctOption) {
-          correct++;
-          earnedPoints += _soal[i].points;
-        }
-      }
-      final wrong = _soal.length - correct;
-      final score = totalPoints == 0
-          ? 0
-          : (earnedPoints / totalPoints * 100).round();
-      final attempt = await _db
-          .from('quiz_attempts')
-          .insert({
-            'user_id': userId,
-            'quiz_id': quizId,
-            'score': score,
-            'correct_count': correct,
-            'wrong_count': wrong,
-            'completed': true,
-          })
-          .select('id')
-          .single();
 
       if (mounted) {
         Navigator.pushReplacementNamed(
           context,
           RouteNames.studentQuizResult,
-          arguments: {'attempt_id': attemptId, 'entity_name': quizTitle},
+          arguments: {
+            'attempt_id': attemptId.toString(),
+            'entity_name': quizTitle,
+          },
         );
       }
     } catch (e) {
