@@ -340,7 +340,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Panel Admin', style: TextStyle(fontSize: 11)),
+                    const Text('Dashboard Admin', style: TextStyle(fontSize: 11)),
                     Text(
                       _adminName,
                       maxLines: 1,
