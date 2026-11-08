@@ -1,0 +1,5 @@
+{
+    "framework": null,
+    "buildCommand": "bash ./vercel-build.sh",
+    "outputDirectory": "build/web"
+}
