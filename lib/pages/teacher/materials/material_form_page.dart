@@ -413,6 +413,34 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
     );
   }
 
+  Widget _imageOnlyPreview() {
+    final previews = _imageMarkdown.allMatches(body.text).map((match) {
+      final uri = Uri.tryParse(match.group(2) ?? '');
+      if (uri == null) return const SizedBox.shrink();
+      return _materialImagePreview(uri, match.group(3), match.group(1));
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FieldLabel('Pratinjau Gambar'),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Ui.line),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: previews,
+          ),
+        ),
+      ],
+    );
+  }
+
   void _removeImage(Uri uri) {
     final match = _findImageMatch(uri);
     if (match == null) return;
@@ -946,27 +974,8 @@ class _TeacherMaterialFormPageState extends State<TeacherMaterialFormPage> {
         AnimatedBuilder(
           animation: body,
           builder: (context, _) {
-            if (body.text.trim().isEmpty) return const SizedBox.shrink();
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const FieldLabel('Pratinjau Isi Materi'),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Ui.line),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: MaterialMarkdown(
-                    data: body.text,
-                    fontSize: 11,
-                    imageBuilder: _materialImagePreview,
-                  ),
-                ),
-              ],
-            );
+            if (!_imagePresent) return const SizedBox.shrink();
+            return _imageOnlyPreview();
           },
         ),
         const FieldLabel('File Materi'),

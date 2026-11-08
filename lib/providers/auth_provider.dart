@@ -9,7 +9,13 @@ class AuthProvider extends ChangeNotifier {
 
   AuthUserModel? user;
   bool loading = false;
+  bool recoveryPending = false;
   String? errorMessage;
+
+  void setRecoveryPending(bool pending) {
+    recoveryPending = pending;
+    notifyListeners();
+  }
 
   Future<bool> login(String email, String password) async {
     loading = true;

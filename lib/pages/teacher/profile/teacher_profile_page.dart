@@ -81,9 +81,41 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
     }
   }
 
+  Widget _profileHeader(String name, String email) => Container(
+    width: double.infinity,
+    padding: EdgeInsets.fromLTRB(
+      20,
+      MediaQuery.of(context).padding.top + 8,
+      20,
+      22,
+    ),
+    decoration: const BoxDecoration(
+      gradient: Ui.gradientTop,
+      borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
+    ),
+    child: Column(
+      children: [
+        const Align(alignment: Alignment.centerLeft, child: BackLink()),
+        const SizedBox(height: 4),
+        DarkAvatar(name: name, size: 64),
+        const SizedBox(height: 8),
+        Text(
+          name,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+          ),
+        ),
+        Text(email, style: const TextStyle(fontSize: 10, color: Colors.white)),
+      ],
+    ),
+  );
+
   @override
-  Widget build(BuildContext context) => EduScaffold(
-    bottom: const EduBottomNav(role: 'teacher', current: 4),
+  Widget build(BuildContext context) => Scaffold(
+    backgroundColor: Ui.bg,
+    bottomNavigationBar: const EduBottomNav(role: 'teacher', current: 4),
     body: FutureBuilder<Map<String, dynamic>>(
       future: _profile,
       builder: (context, snapshot) {
@@ -91,68 +123,84 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError || snapshot.data == null) {
-          return Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text(
-                'Profil belum dapat dimuat.',
-                style: TextStyle(fontSize: 11, color: Ui.muted),
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'Profil belum dapat dimuat.',
+                    style: TextStyle(fontSize: 11, color: Ui.muted),
+                  ),
+                  TextButton(
+                    onPressed: _reload,
+                    child: const Text('Coba lagi'),
+                  ),
+                  const SizedBox(height: 8),
+                  SoftBtn(
+                    label: 'Keluar',
+                    icon: Icons.logout,
+                    bg: Ui.redTint,
+                    fg: Ui.red,
+                    height: 38,
+                    onTap: _logout,
+                  ),
+                ],
               ),
-              TextButton(onPressed: _reload, child: const Text('Coba lagi')),
-            ],
+            ),
           );
         }
 
         final profile = snapshot.data!;
         final name = profile['name'].toString();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: 6),
-            const Text(
-              'Profil',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 14),
-            Center(child: DarkAvatar(name: name, size: 64)),
-            const SizedBox(height: 8),
-            Center(
-              child: Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w800,
+        return SingleChildScrollView(
+          child: Column(
+            children: [
+              _profileHeader(name, profile['email'].toString()),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                child: Column(
+                  children: [
+                    EduCard(
+                      padding: const EdgeInsets.all(14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Informasi Akun',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          _Row('Email', profile['email'].toString()),
+                          const _Row('Role', 'Guru'),
+                          _Row('NIP', profile['nip'].toString()),
+                          _Row('Mapel', profile['subject'].toString()),
+                          _Row(
+                            'Status',
+                            profile['status'].toString(),
+                            last: true,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SoftBtn(
+                      label: 'Keluar',
+                      icon: Icons.logout,
+                      bg: Ui.redTint,
+                      fg: Ui.red,
+                      height: 38,
+                      onTap: _logout,
+                    ),
+                  ],
                 ),
               ),
-            ),
-            Center(
-              child: Text(
-                profile['email'].toString(),
-                style: const TextStyle(fontSize: 10, color: Ui.muted),
-              ),
-            ),
-            const SizedBox(height: 16),
-            EduCard(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Column(
-                children: [
-                  const _Row('Role', 'Guru'),
-                  _Row('NIP', profile['nip'].toString()),
-                  _Row('Mapel', profile['subject'].toString()),
-                  _Row('Status', profile['status'].toString(), last: true),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            SoftBtn(
-              label: 'Keluar',
-              icon: Icons.logout,
-              bg: Ui.redTint,
-              fg: Ui.red,
-              height: 38,
-              onTap: _logout,
-            ),
-          ],
+            ],
+          ),
         );
       },
     ),

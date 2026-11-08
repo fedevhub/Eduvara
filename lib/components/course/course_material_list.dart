@@ -5,7 +5,13 @@ import '../cards/material_card.dart';
 class CourseMaterialList extends StatelessWidget {
   final List<Materi> materials;
   final ValueChanged<Materi>? onTap;
-  const CourseMaterialList({super.key, required this.materials, this.onTap});
+  final bool showTrailing;
+  const CourseMaterialList({
+    super.key,
+    required this.materials,
+    this.onTap,
+    this.showTrailing = true,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
@@ -13,7 +19,11 @@ class CourseMaterialList extends StatelessWidget {
         .map(
           (m) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
-            child: MaterialCard(material: m, onTap: () => onTap?.call(m)),
+            child: MaterialCard(
+              material: m,
+              onTap: () => onTap?.call(m),
+              trailing: showTrailing ? null : const SizedBox.shrink(),
+            ),
           ),
         )
         .toList(),

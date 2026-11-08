@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../components/ui/kit.dart';
 import '../../core/routes/route_names.dart';
 import '../../providers/auth_provider.dart';
@@ -51,6 +53,67 @@ class _LoginPageState extends State<LoginPage> {
         : RouteNames.dashboardForRole(role);
 
     Navigator.pushNamedAndRemoveUntil(context, destination, (route) => false);
+  }
+
+  Future<void> _showForgotPassword() async {
+    final controller = TextEditingController(text: email.text.trim());
+    final resetEmail = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Lupa Password'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.emailAddress,
+          decoration: const InputDecoration(labelText: 'Email akun'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Kirim tautan'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (resetEmail == null || !mounted) return;
+    if (resetEmail.isEmpty || !resetEmail.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Masukkan email akun yang valid.')),
+      );
+      return;
+    }
+
+    try {
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        resetEmail,
+        redirectTo: kIsWeb ? Uri.base.origin : 'eduvara://reset-password',
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Jika email terdaftar, tautan reset password telah dikirim.',
+          ),
+        ),
+      );
+    } on AuthException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal mengirim tautan reset: ${error.message}'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mengirim tautan reset: $error')),
+      );
+    }
   }
 
   Widget _fieldBox({
@@ -207,9 +270,15 @@ class _LoginPageState extends State<LoginPage> {
                                 'Remember me',
                                 style: TextStyle(fontSize: 9),
                               );
-                              const forgotLabel = Text(
-                                'Forget your password?',
-                                style: TextStyle(fontSize: 9),
+                              final forgotLabel = InkWell(
+                                onTap: _showForgotPassword,
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 4),
+                                  child: Text(
+                                    'Lupa password?',
+                                    style: TextStyle(fontSize: 9),
+                                  ),
+                                ),
                               );
 
                               if (constraints.maxWidth < 260) {

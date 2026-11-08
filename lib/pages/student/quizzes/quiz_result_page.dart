@@ -1,23 +1,32 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
+import '../../../core/utils/quiz_score.dart';
 import '../../../core/routes/route_names.dart';
 
 class _ResultData {
   final int score;
+  final int totalPoints;
   final int correct;
   final int wrong;
   final int passingScore;
   final dynamic courseId;
   const _ResultData(
     this.score,
+    this.totalPoints,
     this.correct,
     this.wrong,
     this.passingScore,
     this.courseId,
   );
 
-  bool get passed => score >= passingScore;
+  bool get passed {
+    if (totalPoints <= 0) return score >= passingScore;
+    final percent = (score / totalPoints) * 100;
+    return percent >= passingScore;
+  }
+
+  int get maxScore => totalPoints;
 }
 
 class QuizResultPage extends StatefulWidget {
@@ -29,6 +38,9 @@ class QuizResultPage extends StatefulWidget {
 
 class _QuizResultPageState extends State<QuizResultPage> {
   final _db = Supabase.instance.client;
+
+  bool _isMissingTableError(PostgrestException error) =>
+      error.code == 'PGRST205' || error.code == '42P01';
 
   Future<_ResultData>? _result;
   String? _attemptId;
@@ -57,15 +69,30 @@ class _QuizResultPageState extends State<QuizResultPage> {
       final row = await _db
           .from('quiz_attempts')
           .select(
-            'score, correct_count, wrong_count, quizzes(course_id, passing_score)',
+            'score, total_points, correct_count, wrong_count, quizzes(id, course_id, passing_score)',
           )
           .eq('id', _attemptId!)
           .eq('user_id', uid)
           .single();
 
       final quiz = row['quizzes'] as Map?;
+      final score = (row['score'] as num?)?.round() ?? 0;
+      final quizId = quiz?['id']?.toString();
+      var totalPoints = (row['total_points'] as num?)?.round() ?? 0;
+      if (totalPoints <= 0 && quizId != null) {
+        final questionRows = await _db.rpc(
+          'get_student_quiz_questions',
+          params: {'p_quiz_id': quizId},
+        );
+        final questions = List<Map<String, dynamic>>.from(questionRows);
+        totalPoints = questions.fold<int>(0, (total, question) {
+          final points = question['points'];
+          return total + (points is num ? points.round() : 0);
+        });
+      }
       return _ResultData(
-        (row['score'] as num?)?.round() ?? 0,
+        score,
+        totalPoints,
         (row['correct_count'] as num?)?.toInt() ?? 0,
         (row['wrong_count'] as num?)?.toInt() ?? 0,
         (quiz?['passing_score'] as num?)?.toInt() ?? 80,
@@ -73,7 +100,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
       );
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
-      return const _ResultData(0, 0, 0, 80, null);
+      return const _ResultData(0, 0, 0, 0, 80, null);
     }
   }
 
@@ -132,16 +159,16 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    '${d.score}/${d.maxScore}',
+                    formatQuizScore(d.score, d.maxScore),
                     style: const TextStyle(
                       fontSize: 28,
                       fontWeight: FontWeight.w800,
                       color: Colors.white,
                     ),
                   ),
-                  const Text(
-                    'Dari 100 Poin',
-                    style: TextStyle(fontSize: 7, color: Colors.white),
+                  Text(
+                    d.maxScore > 0 ? 'Dari ${d.maxScore} Poin' : 'Skor Akhir',
+                    style: const TextStyle(fontSize: 7, color: Colors.white),
                   ),
                 ],
               ),

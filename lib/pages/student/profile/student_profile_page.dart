@@ -175,7 +175,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
-    bottomNavigationBar: const EduBottomNav(role: 'student', current: 4),
+    bottomNavigationBar: const EduBottomNav(role: 'student', current: 3),
     body: FutureBuilder<Map<String, dynamic>>(
       future: _profile,
       builder: (context, snapshot) {
@@ -262,7 +262,7 @@ class _Row extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(vertical: 10),
+    padding: const EdgeInsets.symmetric(vertical: 8),
     decoration: BoxDecoration(
       border: last
           ? null

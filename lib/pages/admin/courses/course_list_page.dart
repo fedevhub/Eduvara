@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
+import '../../../core/routes/route_names.dart';
+import 'course_detail_page.dart';
 import 'course_form_page.dart';
 
 /// Nama tabel Supabase (ubah di sini kalau berbeda)
@@ -275,21 +277,45 @@ class _CourseListPageState extends State<CourseListPage> {
   }
 
   Future<void> _openCourseForm({Map<String, dynamic>? course}) async {
-    final size = MediaQuery.sizeOf(context);
-    final changed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      routeSettings: RouteSettings(arguments: course),
-      builder: (context) => Dialog(
-        insetPadding: const EdgeInsets.all(20),
-        child: SizedBox(
-          width: size.width > 800 ? 760 : size.width - 40,
-          height: size.height * 0.9,
-          child: const AdminCourseFormPage(),
+    try {
+      final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          settings: RouteSettings(
+            name: RouteNames.adminCourseForm,
+            arguments: course,
+          ),
+          builder: (_) => const AdminCourseFormPage(),
         ),
-      ),
-    );
-    if (changed == true && mounted) _load();
+      );
+      if (changed == true && mounted) _load();
+    } catch (e) {
+      debugPrint('[CourseList] gagal membuka form course: $e');
+      if (mounted) _snack('Halaman course tidak dapat dibuka: $e');
+    }
+  }
+
+  Future<void> _openCourseDetail(Map<String, dynamic> course) async {
+    final key = _idKey(course);
+    if (key == null || course[key].toString().isEmpty) {
+      _snack('ID course tidak valid.');
+      return;
+    }
+
+    try {
+      final changed = await Navigator.of(context).push<bool>(
+        MaterialPageRoute<bool>(
+          settings: RouteSettings(
+            name: RouteNames.adminCourseDetail,
+            arguments: course[key].toString(),
+          ),
+          builder: (_) => const AdminCourseDetailPage(),
+        ),
+      );
+      if (changed == true && mounted) _load();
+    } catch (e) {
+      debugPrint('[CourseList] gagal membuka detail course: $e');
+      if (mounted) _snack('Detail course tidak dapat dibuka: $e');
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -357,13 +383,6 @@ class _CourseListPageState extends State<CourseListPage> {
                               ),
                             ),
                           ),
-                          IconButton(
-                            tooltip: 'Edit course',
-                            visualDensity: VisualDensity.compact,
-                            onPressed: () => _openCourseForm(course: c),
-                            icon: const Icon(Icons.edit_outlined, size: 18),
-                            color: Ui.blue,
-                          ),
                           Pill(
                             _active(c) ? 'Aktif' : 'Nonaktif',
                             kind: _active(c)
@@ -391,7 +410,29 @@ class _CourseListPageState extends State<CourseListPage> {
                         ),
                       ),
                       const SizedBox(height: 10),
-                      SoftBtn.delete(onTap: () => _delete(c)),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SoftBtn.edit(
+                              onTap: () => _openCourseForm(course: c),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: SoftBtn.delete(onTap: () => _delete(c)),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: SoftBtn(
+                              label: 'Detail',
+                              icon: Icons.visibility_outlined,
+                              bg: Ui.greenSoft,
+                              fg: Ui.greenDark,
+                              onTap: () => _openCourseDetail(c),
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
