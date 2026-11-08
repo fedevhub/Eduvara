@@ -86,9 +86,8 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final rows = await _db
           .from('notifications')
           .select('id')
-          .or('user_id.eq.${user.id},user_id.is.null')
-          .eq('is_read', false)
-          .limit(99);
+          .eq('user_id', user.id)
+          .eq('is_read', false);
       _unreadNotifications = List<Map<String, dynamic>>.from(rows).length;
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) {
@@ -115,18 +114,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       if (e.code != 'PGRST205') rethrow;
     }
 
-    List<Map<String, dynamic>> quizzes = const [];
-    try {
-      quizzes = List<Map<String, dynamic>>.from(
-        await _db
-            .from('quizzes')
-            .select('id, course_id')
-            .inFilter('course_id', courseIds),
-      );
-    } on PostgrestException catch (e) {
-      if (e.code != 'PGRST205') rethrow;
-    }
-
     final totalByCourse = <String, int>{};
     final courseByMaterial = <String, String>{};
     for (final m in materials) {
@@ -135,21 +122,18 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       courseByMaterial[m['id'].toString()] = cid;
     }
 
-    final totalQuizByCourse = <String, int>{};
-    final quizById = <String, String>{};
-    for (final q in quizzes) {
-      final cid = q['course_id'].toString();
-      totalQuizByCourse[cid] = (totalQuizByCourse[cid] ?? 0) + 1;
-      quizById[q['id'].toString()] = cid;
+    List<Map<String, dynamic>> quizzes = const [];
+    try {
+      quizzes = List<Map<String, dynamic>>.from(
+        await _db
+            .from('quizzes')
+            .select('id, course_id')
+            .inFilter('course_id', courseIds)
+            .eq('status', 'published'),
+      );
+    } on PostgrestException catch (e) {
+      if (e.code != 'PGRST205') rethrow;
     }
-
-    final quizzes = List<Map<String, dynamic>>.from(
-      await _db
-          .from('quizzes')
-          .select('id, course_id')
-          .inFilter('course_id', courseIds)
-          .eq('status', 'published'),
-    );
     final totalQuizzesByCourse = <String, int>{};
     final courseByQuiz = <String, String>{};
     for (final quiz in quizzes) {
@@ -157,6 +141,22 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       totalQuizzesByCourse[courseId] =
           (totalQuizzesByCourse[courseId] ?? 0) + 1;
       courseByQuiz[quiz['id'].toString()] = courseId;
+    }
+    final doneQuizByCourse = <String, int>{};
+    final userId = _db.auth.currentUser?.id;
+    if (userId != null && courseByQuiz.isNotEmpty) {
+      final attempts = await _db
+          .from('quiz_attempts')
+          .select('quiz_id')
+          .eq('user_id', userId)
+          .eq('completed', true)
+          .inFilter('quiz_id', courseByQuiz.keys.toList());
+      for (final attempt in attempts) {
+        final cid = courseByQuiz[attempt['quiz_id'].toString()];
+        if (cid != null) {
+          doneQuizByCourse[cid] = (doneQuizByCourse[cid] ?? 0) + 1;
+        }
+      }
     }
 
     final doneByCourse = <String, int>{};
@@ -180,12 +180,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final cid = c.id.toString();
       final totalMaterials = totalByCourse[cid] ?? 0;
       final total = totalMaterials + (totalQuizzesByCourse[cid] ?? 0);
-      final done = doneByCourse[cid] ?? 0;
-      final totalQuiz = totalQuizByCourse[cid] ?? 0;
-      final doneQuiz = doneQuizByCourse[cid] ?? 0;
+      final done = (doneByCourse[cid] ?? 0) + (doneQuizByCourse[cid] ?? 0);
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
-      final quizDone = totalQuiz > 0 && doneQuiz >= totalQuiz;
-      final isDone = (total > 0 && done >= total) || quizDone;
+      final isDone = total > 0 && done >= total;
 
       final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
 
@@ -315,7 +312,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     ),
   );
 
-  Widget _NotificationButton({
+  Widget _notificationButton({
     required int count,
     required VoidCallback onTap,
   }) => IconButton(
@@ -379,7 +376,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                 ],
               ),
             ),
-            _NotificationButton(
+            _notificationButton(
               count: _unreadNotifications,
               onTap: () async {
                 await Navigator.pushNamed(

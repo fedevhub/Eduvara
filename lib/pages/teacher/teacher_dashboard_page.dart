@@ -129,8 +129,9 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         }
       }
 
-      // 4. Progress dihitung dari materi yang ditandai selesai siswa.
-      final materialCountByCourse = <String, int>{};
+      // 4. Completion uses the same published tasks and enrolled students as
+      // the admin course statistics.
+      final materialsByCourse = <String, Set<String>>{};
       final courseByMaterial = <String, String>{};
       if (courseIds.isNotEmpty) {
         final materialRows = await _db
@@ -139,25 +140,67 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
             .inFilter('course_id', courseIds);
         for (final material in materialRows) {
           final courseId = material['course_id'].toString();
-          materialCountByCourse[courseId] =
-              (materialCountByCourse[courseId] ?? 0) + 1;
-          courseByMaterial[material['id'].toString()] = courseId;
+          final materialId = material['id'].toString();
+          materialsByCourse
+              .putIfAbsent(courseId, () => <String>{})
+              .add(materialId);
+          courseByMaterial[materialId] = courseId;
         }
       }
 
-      final completedByCourse = <String, int>{};
+      final quizzesByCourse = <String, Set<String>>{};
+      final courseByQuiz = <String, String>{};
+      if (courseIds.isNotEmpty) {
+        final quizRows = await _db
+            .from('quizzes')
+            .select('id, course_id, status')
+            .inFilter('course_id', courseIds);
+        for (final quiz in quizRows) {
+          if (quiz['status'] != 'published') continue;
+          final courseId = quiz['course_id'].toString();
+          final quizId = quiz['id'].toString();
+          quizzesByCourse.putIfAbsent(courseId, () => <String>{}).add(quizId);
+          courseByQuiz[quizId] = courseId;
+        }
+      }
+
+      final completedAssignmentsByCourse = <String, Set<String>>{};
       if (courseByMaterial.isNotEmpty) {
         final progressRows = await _db
             .from('material_progress')
-            .select('material_id')
+            .select('user_id, material_id')
             .eq('completed', true)
             .inFilter('material_id', courseByMaterial.keys.toList());
         for (final progress in progressRows) {
-          final courseId = courseByMaterial[progress['material_id'].toString()];
-          if (courseId != null) {
-            completedByCourse[courseId] =
-                (completedByCourse[courseId] ?? 0) + 1;
+          final materialId = progress['material_id'].toString();
+          final studentId = progress['user_id'].toString();
+          final courseId = courseByMaterial[materialId];
+          if (courseId == null ||
+              studentsByCourse[courseId]?.contains(studentId) != true) {
+            continue;
           }
+          completedAssignmentsByCourse
+              .putIfAbsent(courseId, () => <String>{})
+              .add('material:$materialId:$studentId');
+        }
+      }
+      if (courseByQuiz.isNotEmpty) {
+        final attempts = await _db
+            .from('quiz_attempts')
+            .select('user_id, quiz_id')
+            .eq('completed', true)
+            .inFilter('quiz_id', courseByQuiz.keys.toList());
+        for (final attempt in attempts) {
+          final quizId = attempt['quiz_id'].toString();
+          final studentId = attempt['user_id'].toString();
+          final courseId = courseByQuiz[quizId];
+          if (courseId == null ||
+              studentsByCourse[courseId]?.contains(studentId) != true) {
+            continue;
+          }
+          completedAssignmentsByCourse
+              .putIfAbsent(courseId, () => <String>{})
+              .add('quiz:$quizId:$studentId');
         }
       }
 
@@ -165,10 +208,13 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       for (final course in courses) {
         final id = course['id'].toString();
         final studentCount = studentsByCourse[id]?.length ?? 0;
-        final denominator = (materialCountByCourse[id] ?? 0) * studentCount;
-        if (denominator > 0) {
-          completionByCourse[id] = (completedByCourse[id] ?? 0) / denominator;
-        }
+        final taskCount =
+            (materialsByCourse[id]?.length ?? 0) +
+            (quizzesByCourse[id]?.length ?? 0);
+        final denominator = taskCount * studentCount;
+        completionByCourse[id] = denominator == 0
+            ? 0
+            : (completedAssignmentsByCourse[id]?.length ?? 0) / denominator;
       }
 
       // 5. Nilai diambil dari percobaan quiz yang disimpan siswa.

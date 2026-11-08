@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../components/notifications/notification_widgets.dart';
 import '../../../components/ui/kit.dart';
 
 class StudentNotificationPage extends StatefulWidget {
@@ -30,7 +31,7 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
       await _db
           .from('notifications')
           .update({'is_read': true})
-          .or('user_id.eq.$uid,user_id.is.null')
+          .eq('user_id', uid)
           .eq('is_read', false);
 
       if (!mounted) return;
@@ -60,141 +61,49 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
     try {
       final data = await _db
           .from('notifications')
-          .select('id, title, message, created_at, is_read')
+          .select('id, user_id, title, message, created_at, is_read')
           .eq('user_id', uid)
           .order('created_at', ascending: false);
 
-      final rows = List<Map<String, dynamic>>.from(data);
-      final unreadIds = rows
-          .where((row) => row['is_read'] != true)
-          .map((row) => row['id'])
-          .toList();
-      if (unreadIds.isNotEmpty) {
-        await _db
-            .from('notifications')
-            .update({'is_read': true})
-            .eq('user_id', uid)
-            .inFilter('id', unreadIds);
-        for (final row in rows) {
-          row['is_read'] = true;
-        }
-      }
-      return rows;
+      return List<Map<String, dynamic>>.from(data);
     } on PostgrestException catch (e) {
       if (!_isMissingTableError(e)) rethrow;
       return const [];
     }
   }
 
-  String _two(int n) => n.toString().padLeft(2, '0');
-
-  DateTime? _date(dynamic raw) =>
-      DateTime.tryParse(raw?.toString() ?? '')?.toLocal();
-
-  String _dayLabel(DateTime d) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final day = DateTime(d.year, d.month, d.day);
-    final diff = today.difference(day).inDays;
-    if (diff == 0) return 'Hari Ini';
-    if (diff == 1) return 'Kemarin';
-    return '${_two(d.day)} - ${_two(d.month)} - ${d.year}';
-  }
-
-  String _ago(DateTime? d) {
-    if (d == null) return '-';
-    final diff = DateTime.now().difference(d);
-    if (diff.inMinutes < 1) return 'Baru Saja';
-    if (diff.inMinutes < 60) return '${diff.inMinutes} Menit Lalu';
-    if (diff.inHours < 24) return '${diff.inHours} Jam Lalu';
-    if (diff.inDays < 7) return '${diff.inDays} Hari Lalu';
-    return '${_two(d.day)}-${_two(d.month)}-${d.year}';
-  }
-
-  Widget _card(Map<String, dynamic> row, DateTime? date) => Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: EduCard(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  row['title']?.toString() ?? '-',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Text(
-                _ago(date),
-                style: const TextStyle(fontSize: 7.5, color: Ui.muted),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            row['message']?.toString() ?? '',
-            style: const TextStyle(fontSize: 8.5),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  List<Widget> _buildGroups(List<Map<String, dynamic>> rows) {
-    final widgets = <Widget>[];
-    String? lastLabel;
-    for (final row in rows) {
-      final d = _date(row['created_at']);
-      final label = d == null ? '-' : _dayLabel(d);
-      if (label != lastLabel) {
-        widgets.add(Text(label, style: const TextStyle(fontSize: 10)));
-        widgets.add(const SizedBox(height: 8));
-        lastLabel = label;
+  Future<void> _markAsRead(Map<String, dynamic> row) async {
+    if (row['is_read'] == true) return;
+    final uid = _db.auth.currentUser?.id;
+    if (uid == null) return;
+    try {
+      await _db
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('id', row['id'])
+          .eq('user_id', uid);
+      if (!mounted) return;
+      setState(() {
+        row['is_read'] = true;
+        _items = _load();
+      });
+    } catch (e) {
+      debugPrint('[StudentNotifications] gagal menandai notifikasi dibaca: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menandai notifikasi dibaca: $e')),
+        );
       }
-      widgets.add(_card(row, d));
     }
-    return widgets;
   }
 
   @override
   Widget build(BuildContext context) => EduScaffold(
-    bottom: const EduBottomNav(role: 'student', current: 2),
+    bottom: const EduBottomNav(role: 'student', current: -1),
     body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            const Expanded(
-              child: Text(
-                'Notification',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-              ),
-            ),
-            TextButton(
-              onPressed: _busy ? null : _markAllAsRead,
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-              ),
-              child: Text(
-                _busy ? 'Memproses...' : 'Baca Semua',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 2),
+        NotificationHeader(busy: _busy, onMarkAllRead: _markAllAsRead),
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _items,
           builder: (context, snapshot) {
@@ -215,19 +124,9 @@ class _StudentNotificationPageState extends State<StudentNotificationPage> {
                 ),
               );
             }
-            final rows = snapshot.data ?? [];
-            if (rows.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Belum ada notifikasi.',
-                  style: TextStyle(fontSize: 10, color: Ui.muted),
-                ),
-              );
-            }
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: _buildGroups(rows),
+            return NotificationFeed(
+              rows: snapshot.data ?? const [],
+              onTapNotification: _markAsRead,
             );
           },
         ),

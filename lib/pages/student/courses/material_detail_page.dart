@@ -204,6 +204,17 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
     final fileName = _material!['file_name']?.toString();
     final hasFile = fileName != null && fileName.isNotEmpty;
     final sizeText = _formatSize(_material!['file_size']);
+    final summary =
+        [
+              _material!['summary'],
+              _material!['content'],
+              _material!['description'],
+            ]
+            .map((value) => value?.toString())
+            .firstWhere(
+              (value) => value != null && value.trim().isNotEmpty,
+              orElse: () => null,
+            );
 
     return Scaffold(
       backgroundColor: Ui.bg,
@@ -237,9 +248,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        ..._summaryParagraphs(
-                          _material!['summary']?.toString(),
-                        ),
+                        ..._summaryParagraphs(summary),
                       ],
                     ),
                   ),

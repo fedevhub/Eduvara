@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../../../components/notifications/notification_widgets.dart';
 import '../../../components/ui/kit.dart';
 
 class TeacherNotificationPage extends StatefulWidget {
@@ -13,6 +15,7 @@ class TeacherNotificationPage extends StatefulWidget {
 class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
   final _db = Supabase.instance.client;
   late Future<List<Map<String, dynamic>>> _notifications;
+  bool _busy = false;
 
   @override
   void initState() {
@@ -31,46 +34,66 @@ class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
         .select('id, title, message, created_at, is_read')
         .eq('user_id', userId)
         .order('created_at', ascending: false);
-    final items = List<Map<String, dynamic>>.from(rows);
-    final unreadIds = items
-        .where((item) => item['is_read'] != true)
-        .map((item) => item['id'])
-        .toList();
-    if (unreadIds.isNotEmpty) {
-      await _db
-          .from('notifications')
-          .update({'is_read': true})
-          .eq('user_id', userId)
-          .inFilter('id', unreadIds);
-      for (final item in items) {
-        item['is_read'] = true;
-      }
-    }
-    return items;
+    return List<Map<String, dynamic>>.from(rows);
   }
 
   void _reload() => setState(() => _notifications = _load());
 
-  String _date(dynamic value) {
-    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
-    if (date == null) return '-';
-    String two(int number) => number.toString().padLeft(2, '0');
-    return '${two(date.day)}-${two(date.month)}-${date.year} '
-        '${two(date.hour)}:${two(date.minute)}';
+  Future<void> _markAllAsRead() async {
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null || _busy) return;
+    setState(() => _busy = true);
+    try {
+      await _db
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('user_id', userId)
+          .eq('is_read', false);
+      if (mounted) setState(() => _notifications = _load());
+    } catch (e) {
+      debugPrint('[TeacherNotifications] gagal menandai semua dibaca: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menandai semua dibaca: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _markAsRead(Map<String, dynamic> item) async {
+    if (item['is_read'] == true) return;
+    final userId = _db.auth.currentUser?.id;
+    if (userId == null) return;
+    try {
+      await _db
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('id', item['id'])
+          .eq('user_id', userId);
+      if (!mounted) return;
+      setState(() {
+        item['is_read'] = true;
+        _notifications = _load();
+      });
+    } catch (e) {
+      debugPrint('[TeacherNotifications] gagal menandai dibaca: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menandai notifikasi dibaca: $e')),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) => EduScaffold(
+    bottom: const EduBottomNav(role: 'teacher', current: -1),
     body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const BackLink(),
-        const SizedBox(height: 4),
-        const Text(
-          'Notifikasi',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 10),
+        NotificationHeader(busy: _busy, onMarkAllRead: _markAllAsRead),
         FutureBuilder<List<Map<String, dynamic>>>(
           future: _notifications,
           builder: (context, snapshot) {
@@ -87,8 +110,8 @@ class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
                 children: [
                   Text(
                     'Notifikasi belum dapat dimuat.\n${snapshot.error}',
-                    style: const TextStyle(fontSize: 10, color: Ui.muted),
                     textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 10, color: Ui.muted),
                   ),
                   TextButton(
                     onPressed: _reload,
@@ -97,57 +120,9 @@ class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
                 ],
               );
             }
-
-            final items = snapshot.data ?? const [];
-            if (items.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                  'Belum ada notifikasi.',
-                  style: TextStyle(fontSize: 10, color: Ui.muted),
-                ),
-              );
-            }
-            return Column(
-              children: [
-                for (final item in items)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: EduCard(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  item['title']?.toString() ?? '-',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              Text(
-                                _date(item['created_at']),
-                                style: const TextStyle(
-                                  fontSize: 8,
-                                  color: Ui.muted,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            item['message']?.toString() ?? '',
-                            style: const TextStyle(fontSize: 9),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-              ],
+            return NotificationFeed(
+              rows: snapshot.data ?? const [],
+              onTapNotification: _markAsRead,
             );
           },
         ),

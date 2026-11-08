@@ -1,16 +1,9 @@
-# eduvara
+# Eduvara
 
-A new Flutter project.
+## Password recovery setup
 
-## Getting Started
-
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Password recovery verifies the account owner through a Supabase email link. Add
+`eduvara://reset-password` to the Supabase Auth redirect URL allowlist for
+Android and iOS. For Flutter web, allow the deployed app's origin as a redirect
+URL. After the link is opened, the app presents the new-password and
+confirmation fields.

@@ -1,6 +1,5 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/utils/formatters.dart';
 
 class Ui {
@@ -147,16 +146,17 @@ class PageTitle extends StatelessWidget {
         ),
       ),
       if (onAdd != null)
-        GestureDetector(
-          onTap: onAdd,
-          child: Container(
-            width: 38,
-            height: 38,
-            decoration: BoxDecoration(
-              color: Ui.navy,
-              borderRadius: BorderRadius.circular(10),
+        Material(
+          color: Ui.navy,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            onTap: onAdd,
+            borderRadius: BorderRadius.circular(10),
+            child: const SizedBox(
+              width: 38,
+              height: 38,
+              child: Icon(Icons.add, color: Colors.white),
             ),
-            child: const Icon(Icons.add, color: Colors.white),
           ),
         ),
     ],
@@ -382,31 +382,38 @@ class SoftBtn extends StatelessWidget {
       height = 34;
 
   @override
-  Widget build(BuildContext context) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      height: height,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: bg,
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    enabled: onTap != null,
+    child: Material(
+      color: bg,
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (icon != null) ...[
-            Icon(icon, size: 14, color: fg),
-            const SizedBox(width: 6),
-          ],
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: fg,
+        child: SizedBox(
+          width: double.infinity,
+          height: height,
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (icon != null) ...[
+                  Icon(icon, size: 14, color: fg),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: fg,
+                  ),
+                ),
+              ],
             ),
           ),
-        ],
+        ),
       ),
     ),
   );
@@ -914,40 +921,6 @@ class EduBottomNav extends StatefulWidget {
 }
 
 class _EduBottomNavState extends State<EduBottomNav> {
-  late Future<int> _unreadNotifications;
-
-  @override
-  void initState() {
-    super.initState();
-    _unreadNotifications = _loadUnreadNotifications();
-  }
-
-  @override
-  void didUpdateWidget(covariant EduBottomNav oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.role != widget.role) {
-      _unreadNotifications = _loadUnreadNotifications();
-    }
-  }
-
-  Future<int> _loadUnreadNotifications() async {
-    if (widget.role != 'student') return 0;
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) return 0;
-    try {
-      final rows = await Supabase.instance.client
-          .from('notifications')
-          .select('id')
-          .eq('user_id', userId)
-          .eq('is_read', false);
-      return rows.length;
-    } catch (error, stackTrace) {
-      debugPrint('[EduBottomNav] Gagal memuat jumlah notifikasi: $error');
-      debugPrintStack(stackTrace: stackTrace);
-      rethrow;
-    }
-  }
-
   List<_NavItem> get _items => switch (widget.role) {
     'admin' => const [
       _NavItem(Icons.home_outlined, 'Home', '/admin/dashboard'),
@@ -975,46 +948,8 @@ class _EduBottomNavState extends State<EduBottomNav> {
     ),
   };
 
-  Widget _navIcon(int index, _NavItem item) {
-    final icon = Icon(item.icon, size: 20, color: Ui.navy);
-    if (widget.role != 'student' || index != 3 || widget.current == 3) {
-      return icon;
-    }
-    return FutureBuilder<int>(
-      future: _unreadNotifications,
-      builder: (context, snapshot) {
-        final count = snapshot.data ?? 0;
-        if (snapshot.hasError) return icon;
-        if (count == 0) return icon;
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            icon,
-            Positioned(
-              right: -9,
-              top: -7,
-              child: Container(
-                constraints: const BoxConstraints(minWidth: 14, minHeight: 14),
-                padding: const EdgeInsets.symmetric(horizontal: 3),
-                decoration: const BoxDecoration(
-                  color: Ui.red,
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  count > 99 ? '99+' : '$count',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
+  Widget _navIcon(_NavItem item) {
+    return Icon(item.icon, size: 20, color: Ui.navy);
   }
 
   @override
@@ -1060,7 +995,7 @@ class _EduBottomNavState extends State<EduBottomNav> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        _navIcon(i, items[i]),
+                        _navIcon(items[i]),
                         const SizedBox(height: 2),
                         Text(
                           items[i].label,

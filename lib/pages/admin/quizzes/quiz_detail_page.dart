@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../components/cards/quiz_card.dart';
-import '../../../components/navigation/app_bar.dart';
-import '../../../models/quiz_model.dart';
+import '../../../components/ui/kit.dart';
 
 class AdminQuizDetailPage extends StatefulWidget {
   const AdminQuizDetailPage({super.key});
@@ -40,7 +38,9 @@ class _AdminQuizDetailPageState extends State<AdminQuizDetailPage> {
     );
     final questions = await _db
         .from('quiz_questions')
-        .select('id, question, option_a, option_b, option_c, option_d')
+        .select(
+          'id, question, option_a, option_b, option_c, option_d, correct_option, points',
+        )
         .eq('quiz_id', _quizId!)
         .order('id');
     return {...quiz, 'questions': List<Map<String, dynamic>>.from(questions)};
@@ -48,23 +48,174 @@ class _AdminQuizDetailPageState extends State<AdminQuizDetailPage> {
 
   void _reload() => setState(() => _quiz = _load());
 
+  Widget _valueField(String label, String value, {int maxLines = 1}) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      FieldLabel(label),
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Ui.line),
+        ),
+        child: Text(
+          value.isEmpty ? '-' : value,
+          maxLines: maxLines,
+          overflow: maxLines == 1 ? TextOverflow.ellipsis : null,
+          style: const TextStyle(fontSize: 10, color: Ui.text),
+        ),
+      ),
+    ],
+  );
+
+  Widget _questionCard(Map<String, dynamic> question, int index) {
+    final correct = (question['correct_option'] as num?)?.toInt();
+    final options = [
+      question['option_a'],
+      question['option_b'],
+      question['option_c'],
+      question['option_d'],
+    ];
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: FormCard(
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 25,
+                height: 25,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Ui.blue,
+                  borderRadius: BorderRadius.circular(7),
+                ),
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  question['question']?.toString().trim().isNotEmpty == true
+                      ? question['question'].toString()
+                      : 'Pertanyaan belum diisi',
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (var optionIndex = 0; optionIndex < options.length; optionIndex++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 9,
+                ),
+                decoration: BoxDecoration(
+                  color: optionIndex == correct ? Ui.greenSoft : Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: optionIndex == correct ? Ui.green : Ui.line,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      String.fromCharCode(65 + optionIndex),
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: optionIndex == correct ? Ui.greenDark : Ui.text,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        options[optionIndex]?.toString().trim().isNotEmpty ==
+                                true
+                            ? options[optionIndex].toString()
+                            : '-',
+                        style: const TextStyle(fontSize: 10),
+                      ),
+                    ),
+                    if (optionIndex == correct)
+                      const Icon(
+                        Icons.check_circle,
+                        color: Ui.greenDark,
+                        size: 15,
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          Row(
+            children: [
+              const Text('Nilai', style: TextStyle(fontSize: 10)),
+              const SizedBox(width: 8),
+              Text(
+                '${question['points'] ?? 0} poin',
+                style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: const EduvaraAppBar(title: 'Detail Quiz', showBack: true),
-    body: _quiz == null
-        ? const Center(child: Text('Quiz tidak ditemukan.'))
-        : FutureBuilder<Map<String, dynamic>>(
+  Widget build(BuildContext context) => EduScaffold(
+    body: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const BackLink(),
+        const SizedBox(height: 4),
+        const Text(
+          'Detail Quiz',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        if (_quiz == null)
+          const Center(child: Text('Quiz tidak ditemukan.'))
+        else
+          FutureBuilder<Map<String, dynamic>>(
             future: _quiz,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(child: CircularProgressIndicator());
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
               }
               if (snapshot.hasError || snapshot.data == null) {
                 return Center(
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text('Quiz belum dapat dimuat.\n${snapshot.error}'),
+                      Text(
+                        'Quiz belum dapat dimuat.\n${snapshot.error}',
+                        textAlign: TextAlign.center,
+                      ),
                       TextButton(
                         onPressed: _reload,
                         child: const Text('Coba lagi'),
@@ -75,59 +226,65 @@ class _AdminQuizDetailPageState extends State<AdminQuizDetailPage> {
               }
 
               final data = snapshot.data!;
-              final quiz = Quiz(
-                id: data['id'].toString(),
-                courseId: data['course_id'].toString(),
-                title: (data['title'] ?? '').toString(),
-                questionCount: (data['question_count'] as num?)?.toInt() ?? 0,
-              );
               final questions = data['questions'] as List<Map<String, dynamic>>;
-              return ListView(
-                padding: const EdgeInsets.all(20),
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  QuizCard(quiz: quiz),
-                  const SizedBox(height: 12),
-                  Text('Status: ${data['status'] ?? '-'}'),
-                  Text('Durasi: ${data['duration_minutes'] ?? 0} menit'),
-                  Text('Nilai lulus: ${data['passing_score'] ?? 0}/100'),
-                  if ((data['description'] ?? '').toString().isNotEmpty)
-                    Text(data['description'].toString()),
-                  const SizedBox(height: 20),
+                  FormCard(
+                    children: [
+                      _valueField('Judul Quiz', '${data['title'] ?? '-'}'),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: _valueField(
+                              'Durasi (menit)',
+                              '${data['duration_minutes'] ?? 0}',
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _valueField(
+                              'Nilai Minimal',
+                              '${data['passing_score'] ?? 0}',
+                            ),
+                          ),
+                        ],
+                      ),
+                      _valueField('Jumlah Soal', '${questions.length} soal'),
+                      _valueField(
+                        'Deskripsi',
+                        '${data['description'] ?? ''}',
+                        maxLines: 3,
+                      ),
+                      FieldLabel('Status'),
+                      Pill(
+                        '${data['status'] ?? '-'}',
+                        kind: data['status'] == 'published'
+                            ? PillKind.active
+                            : PillKind.inactive,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   const Text(
                     'Daftar Soal',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   if (questions.isEmpty)
-                    const Text('Quiz ini belum memiliki soal.')
+                    const Text(
+                      'Quiz ini belum memiliki soal.',
+                      style: TextStyle(fontSize: 10, color: Ui.muted),
+                    )
                   else
                     for (var index = 0; index < questions.length; index++)
-                      Card(
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${index + 1}. ${questions[index]['question'] ?? ''}',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              for (final option in [
-                                questions[index]['option_a'],
-                                questions[index]['option_b'],
-                                questions[index]['option_c'],
-                                questions[index]['option_d'],
-                              ])
-                                Text(option?.toString() ?? ''),
-                            ],
-                          ),
-                        ),
-                      ),
+                      _questionCard(questions[index], index),
                 ],
               );
             },
           ),
+      ],
+    ),
   );
 }
