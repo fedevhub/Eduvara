@@ -5,7 +5,7 @@ import '../../core/routes/route_names.dart';
 import '../../models/course_model.dart';
 import '../../repositories/course_repository.dart';
 
-enum _St { done, running, locked }
+enum _St { done, running }
 
 class _CourseInfo {
   final Course course;
@@ -21,12 +21,6 @@ class _DashData {
   const _DashData(this.name, this.courses);
 
   int count(_St s) => courses.where((c) => c.status == s).length;
-  _CourseInfo? first(_St s) {
-    for (final c in courses) {
-      if (c.status == s) return c;
-    }
-    return null;
-  }
 }
 
 class StudentDashboardPage extends StatefulWidget {
@@ -173,9 +167,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       }
     }
 
-    // status: terkunci jika course sebelumnya belum selesai
     final infos = <_CourseInfo>[];
-    var previousDone = true;
     for (final c in courses) {
       final cid = c.id.toString();
       final totalMaterials = totalByCourse[cid] ?? 0;
@@ -184,10 +176,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
       final isDone = total > 0 && done >= total;
 
-      final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
-
-      infos.add(_CourseInfo(c, st, totalMaterials, pct));
-      previousDone = isDone;
+      infos.add(
+        _CourseInfo(c, isDone ? _St.done : _St.running, totalMaterials, pct),
+      );
     }
     return _DashData(name, infos);
   }
@@ -272,35 +263,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     ),
   );
 
-  Widget _lockedCard(_CourseInfo info) => LockedCard(
-    text: 'Selesaikan Course Sebelumnya',
-    child: EduCard(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  info.course.title,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  '${info.course.teacher} • ${info.total} Materi',
-                  style: const TextStyle(fontSize: 8.5),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
   Widget _message(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 16),
     child: Center(
@@ -350,8 +312,9 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   );
 
   Widget _content(_DashData d) {
-    final running = d.first(_St.running);
-    final locked = d.first(_St.locked);
+    final running = d.courses
+        .where((course) => course.status == _St.running)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,7 +379,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
                   const SizedBox(width: 8),
                   _metric('${d.count(_St.running)}', 'Berjalan'),
                   const SizedBox(width: 8),
-                  _metric('${d.count(_St.locked)}', 'Terkunci'),
+                  _metric('${d.courses.length}', 'Total Course'),
                 ],
               ),
             ],
@@ -450,13 +413,13 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
         const SizedBox(height: 8),
         if (d.courses.isEmpty)
           _message('Belum ada course.')
-        else ...[
-          if (running != null) _runningCard(running),
-          if (running != null && locked != null) const SizedBox(height: 10),
-          if (locked != null) _lockedCard(locked),
-          if (running == null && locked == null)
-            _message('Hebat! Semua course sudah selesai.'),
-        ],
+        else if (running.isEmpty)
+          _message('Hebat! Semua course sudah selesai.')
+        else
+          for (var i = 0; i < running.length; i++) ...[
+            _runningCard(running[i]),
+            if (i < running.length - 1) const SizedBox(height: 10),
+          ],
       ],
     );
   }

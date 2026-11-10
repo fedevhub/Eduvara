@@ -5,7 +5,7 @@ import '../../../core/routes/route_names.dart';
 import '../../../models/course_model.dart';
 import '../../../repositories/course_repository.dart';
 
-enum _St { done, running, locked }
+enum _St { done, running }
 
 class _CourseRow {
   final Course course;
@@ -113,9 +113,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       }
     }
 
-    // hitung status: terkunci jika course sebelumnya belum selesai
     final rows = <_CourseRow>[];
-    var previousDone = true;
     for (final c in courses) {
       final cid = c.id.toString();
       final total =
@@ -124,10 +122,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
       final isDone = total > 0 && done >= total;
 
-      final st = !previousDone ? _St.locked : (isDone ? _St.done : _St.running);
-
-      rows.add(_CourseRow(c, st, pct));
-      previousDone = isDone;
+      rows.add(_CourseRow(c, isDone ? _St.done : _St.running, pct));
     }
     return rows;
   }
@@ -143,7 +138,6 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
   bool _match(_St s) => switch (filter) {
     1 => s == _St.done,
     2 => s == _St.running,
-    3 => s == _St.locked,
     _ => true,
   };
 
@@ -151,22 +145,18 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     final color = switch (st) {
       _St.done => Ui.green,
       _St.running => Ui.blue,
-      _St.locked => Ui.orange,
     };
     final card = EduCard(
-      borderColor: st == _St.locked ? null : color,
+      borderColor: color,
       padding: const EdgeInsets.all(12),
-      onTap: st == _St.locked
-          ? null
-          : () async {
-              await Navigator.pushNamed(
-                context,
-                RouteNames.studentCourseDetail,
-                arguments: {'course_id': course.id},
-              );
-              // refresh progress setelah kembali dari detail
-              if (mounted) _reload();
-            },
+      onTap: () async {
+        await Navigator.pushNamed(
+          context,
+          RouteNames.studentCourseDetail,
+          arguments: {'course_id': course.id},
+        );
+        if (mounted) _reload();
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -185,12 +175,10 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
                 switch (st) {
                   _St.done => 'Selesai',
                   _St.running => 'Berjalan',
-                  _St.locked => 'Terkunci',
                 },
                 kind: switch (st) {
                   _St.done => PillKind.done,
                   _St.running => PillKind.running,
-                  _St.locked => PillKind.locked,
                 },
               ),
             ],
@@ -199,29 +187,21 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
             '${course.teacher} • ${course.description}',
             style: const TextStyle(fontSize: 8.5),
           ),
-          if (st != _St.locked) ...[
-            const SizedBox(height: 8),
-            Text(
-              '$pct% ${st == _St.done ? 'Selesai' : 'Berjalan'}',
-              style: TextStyle(
-                fontSize: 8,
-                fontWeight: FontWeight.w600,
-                color: color,
-              ),
+          const SizedBox(height: 8),
+          Text(
+            '$pct% ${st == _St.done ? 'Selesai' : 'Berjalan'}',
+            style: TextStyle(
+              fontSize: 8,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
-            const SizedBox(height: 3),
-            ProgressLine(value: pct / 100, color: color),
-          ] else
-            const SizedBox(height: 12),
+          ),
+          const SizedBox(height: 3),
+          ProgressLine(value: pct / 100, color: color),
         ],
       ),
     );
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: st == _St.locked
-          ? LockedCard(text: 'Selesaikan Course Sebelumnya', child: card)
-          : card,
-    );
+    return Padding(padding: const EdgeInsets.only(bottom: 10), child: card);
   }
 
   @override
@@ -243,7 +223,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
         ),
         const SizedBox(height: 10),
         FilterChips(
-          labels: const ['Semua', 'Selesai', 'Berjalan', 'Terkunci'],
+          labels: const ['Semua', 'Selesai', 'Berjalan'],
           index: filter,
           onChanged: (i) => setState(() => filter = i),
         ),

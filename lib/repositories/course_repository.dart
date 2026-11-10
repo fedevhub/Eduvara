@@ -28,7 +28,9 @@ class CourseRepository {
           'id, title, description, subject, grade_level, teacher_id, status',
         )
         .inFilter('id', courseIds)
-        .eq('status', 'active');
+        .eq('status', 'active')
+        .order('created_at')
+        .order('title');
     final courses = List<Map<String, dynamic>>.from(courseRows);
 
     final teacherIds = courses

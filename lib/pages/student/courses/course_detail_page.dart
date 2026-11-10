@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
+import '../../../repositories/course_repository.dart';
 
 class StudentCourseDetailPage extends StatefulWidget {
   const StudentCourseDetailPage({super.key});
@@ -24,6 +25,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
   List<Map<String, dynamic>> _quizzes = [];
   Set<String> _doneMaterials = {};
   Set<String> _doneQuizzes = {};
+  bool _previousCoursesComplete = true;
 
   @override
   void didChangeDependencies() {
@@ -133,6 +135,61 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
         }
       }
 
+      var previousCoursesComplete = true;
+      final enrolledCourses = await CourseRepository().getCourses();
+      final currentCourseIndex = enrolledCourses.indexWhere(
+        (course) => course.id == _courseId,
+      );
+      if (currentCourseIndex > 0) {
+        final previousCourseIds = enrolledCourses
+            .take(currentCourseIndex)
+            .map((course) => course.id)
+            .toList();
+        final previousMaterials = await _db
+            .from('materials')
+            .select('id')
+            .inFilter('course_id', previousCourseIds);
+        final previousQuizzes = await _db
+            .from('quizzes')
+            .select('id')
+            .inFilter('course_id', previousCourseIds)
+            .eq('status', 'published');
+        final previousMaterialIds = previousMaterials
+            .map((row) => row['id'].toString())
+            .toSet();
+        final previousQuizIds = previousQuizzes
+            .map((row) => row['id'].toString())
+            .toSet();
+        final completedMaterialIds = <String>{};
+        final completedQuizIds = <String>{};
+
+        if (previousMaterialIds.isNotEmpty) {
+          final progress = await _db
+              .from('material_progress')
+              .select('material_id')
+              .eq('user_id', uid)
+              .eq('completed', true)
+              .inFilter('material_id', previousMaterialIds.toList());
+          completedMaterialIds.addAll(
+            progress.map((row) => row['material_id'].toString()),
+          );
+        }
+        if (previousQuizIds.isNotEmpty) {
+          final attempts = await _db
+              .from('quiz_attempts')
+              .select('quiz_id')
+              .eq('user_id', uid)
+              .eq('completed', true)
+              .inFilter('quiz_id', previousQuizIds.toList());
+          completedQuizIds.addAll(
+            attempts.map((row) => row['quiz_id'].toString()),
+          );
+        }
+        previousCoursesComplete =
+            previousMaterialIds.difference(completedMaterialIds).isEmpty &&
+            previousQuizIds.difference(completedQuizIds).isEmpty;
+      }
+
       if (!mounted) return;
       setState(() {
         _course = course;
@@ -141,6 +198,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
         _quizzes = quizzes;
         _doneMaterials = {for (final r in doneMat) r['material_id'].toString()};
         _doneQuizzes = {for (final r in doneQuiz) r['quiz_id'].toString()};
+        _previousCoursesComplete = previousCoursesComplete;
         _loading = false;
       });
     } catch (e) {
@@ -197,7 +255,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
         : title;
 
     final card = EduCard(
-      borderColor: open ? Ui.blue : (done ? Ui.green : null),
+      borderColor: done ? Ui.green : (open ? Ui.blue : null),
       padding: const EdgeInsets.all(12),
       onTap: open || done
           ? () async {
@@ -258,7 +316,9 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
           ? card
           : LockedCard(
               text: tab == 0
-                  ? 'Selesaikan Modul Sebelumnya'
+                  ? _previousCoursesComplete
+                        ? 'Selesaikan Materi Sebelumnya'
+                        : 'Materi terkunci sampai course sebelumnya selesai'
                   : 'Selesaikan Quiz Sebelumnya',
               child: card,
             ),
@@ -320,7 +380,13 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
   List<Widget> _buildList() {
     if (tab == 0) {
       if (_materials.isEmpty) return [_empty('Belum ada materi')];
-      final st = _states(_materials, _doneMaterials);
+      final sequenceStates = _states(_materials, _doneMaterials);
+      final st = _previousCoursesComplete
+          ? sequenceStates
+          : [
+              for (final state in sequenceStates)
+                _ItemState(state.done, state.done),
+            ];
       return [
         for (var i = 0; i < _materials.length; i++)
           _item(
