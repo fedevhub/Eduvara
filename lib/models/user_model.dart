@@ -47,6 +47,33 @@ class UserModel {
     _ => username ?? '',
   };
 
+  String? get jurusan {
+    final value = kelas?.trim();
+    if (value == null || value.isEmpty) return null;
+
+    const classLabels = {
+      'KELAS',
+      'I',
+      'II',
+      'III',
+      'IV',
+      'V',
+      'VI',
+      'VII',
+      'VIII',
+      'IX',
+      'X',
+      'XI',
+      'XII',
+    };
+    final parts = value.toUpperCase().split(RegExp(r'\s+'));
+    final major = parts.where((part) {
+      return !classLabels.contains(part) && !RegExp(r'^\d+$').hasMatch(part);
+    }).toList();
+
+    return major.isEmpty ? null : major.join(' ');
+  }
+
   String get roleLabel => switch (role) {
     'admin' => 'Admin',
     'teacher' => 'Guru',

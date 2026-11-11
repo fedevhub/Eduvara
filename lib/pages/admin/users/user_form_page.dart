@@ -4,7 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../components/ui/kit.dart';
 import '../../../models/user_model.dart';
 import '../../../repositories/user_repository.dart';
-import '../courses/course_form_page.dart' show SearchableSelect;
+import '../courses/course_form_page.dart' show SubjectSelector;
 
 class UserFormPage extends StatefulWidget {
   const UserFormPage({super.key});
@@ -27,26 +27,7 @@ class _UserFormPageState extends State<UserFormPage> {
     'Admin': 'admin',
   };
 
-  // Daftar mapel, sama dengan yang dipakai di form course.
-  static const List<String> _subjects = [
-    'Matematika',
-    'Bahasa Indonesia',
-    'KIK',
-    'Agama',
-    'Pendidikan Pancasila / Kewarganegaraan',
-    'Ilmu Pengetahuan Alam',
-    'Ilmu Pengetahuan Sosial',
-    'Bahasa Inggris',
-  ];
-
   String? mapel;
-
-  // Kalau data lama berisi mapel di luar daftar, tetap ditampilkan.
-  List<String> get _mapelItems => [
-    ..._subjects,
-    if (mapel != null && mapel!.isNotEmpty && !_subjects.contains(mapel))
-      mapel!,
-  ];
 
   String? roleLabel;
   bool active = true;
@@ -276,10 +257,10 @@ class _UserFormPageState extends State<UserFormPage> {
                 // Guru: username adalah NIP.
                 if (_role == 'teacher') ...[
                   const FieldLabel('Mata Pelajaran'),
-                  SearchableSelect(
+                  SubjectSelector(
                     hint: 'Pilih mata pelajaran',
                     value: mapel,
-                    items: _mapelItems,
+                    extraSubjects: mapel == null ? const [] : [mapel!],
                     error: _showErrors && _vMapel() != null,
                     onChanged: (v) => setState(() => mapel = v),
                   ),
@@ -291,7 +272,7 @@ class _UserFormPageState extends State<UserFormPage> {
                   const FieldLabel('Kelas'),
                   EduField(
                     controller: kelas,
-                    hint: 'Contoh: XII RPL 1',
+                    hint: 'Contoh: 12 RPL A',
                     error: _showErrors && _vKelas() != null,
                   ),
                   _err(_vKelas()),

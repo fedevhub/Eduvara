@@ -21,9 +21,18 @@ class _UserListPageState extends State<UserListPage> {
 
   int tab = 0;
   String query = '';
+  String? _classFilter;
+  String? _majorFilter;
+  String _nameOrder = 'Nama A-Z';
+  int _pageIndex = 0;
   bool _loading = true;
   String? _error;
   List<UserModel> _users = [];
+
+  static const int _pageSize = 5;
+  static const String _allClasses = 'Kelas';
+  static const String _allMajors = 'Jurusan';
+  static const List<String> _nameOrderOptions = ['Nama A-Z', 'Nama Z-A'];
 
   @override
   void initState() {
@@ -41,6 +50,7 @@ class _UserListPageState extends State<UserListPage> {
       if (!mounted) return;
       setState(() {
         _users = data;
+        _pageIndex = 0;
         _loading = false;
       });
     } catch (e) {
@@ -55,15 +65,63 @@ class _UserListPageState extends State<UserListPage> {
 
   int _count(String role) => _users.where((u) => u.role == role).length;
 
-  List<UserModel> get _visible {
+  List<UserModel> get _filteredUsers {
     final role = _roles[tab];
     final q = query.trim().toLowerCase();
-    return _users.where((u) {
+    final users = _users.where((u) {
       if (u.role != role) return false;
-      if (q.isEmpty) return true;
-      return u.name.toLowerCase().contains(q) ||
-          u.loginUsername.toLowerCase().contains(q);
+      if (q.isNotEmpty &&
+          !u.name.toLowerCase().contains(q) &&
+          !u.loginUsername.toLowerCase().contains(q)) {
+        return false;
+      }
+      if (role == 'student') {
+        if (_classFilter != null && u.kelas?.trim() != _classFilter) {
+          return false;
+        }
+        if (_majorFilter != null && u.jurusan != _majorFilter) {
+          return false;
+        }
+      }
+      return true;
     }).toList();
+
+    users.sort((first, second) {
+      final byStatus = (first.isActive ? 0 : 1).compareTo(
+        second.isActive ? 0 : 1,
+      );
+      if (byStatus != 0) return byStatus;
+      final byName = first.name.toLowerCase().compareTo(
+        second.name.toLowerCase(),
+      );
+      return _nameOrder == 'Nama Z-A' ? -byName : byName;
+    });
+
+    return users;
+  }
+
+  List<String> get _classOptions {
+    final options =
+        _users
+            .where((user) => user.role == 'student')
+            .map((user) => user.kelas?.trim() ?? '')
+            .where((kelas) => kelas.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    return options;
+  }
+
+  List<String> get _majorOptions {
+    final options =
+        _users
+            .where((user) => user.role == 'student')
+            .map((user) => user.jurusan ?? '')
+            .where((major) => major.isNotEmpty)
+            .toSet()
+            .toList()
+          ..sort();
+    return options;
   }
 
   String _info(UserModel u) {
@@ -126,7 +184,7 @@ class _UserListPageState extends State<UserListPage> {
       );
     }
 
-    final users = _visible;
+    final users = _filteredUsers;
     if (users.isEmpty) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -139,8 +197,89 @@ class _UserListPageState extends State<UserListPage> {
       );
     }
 
-    return Column(children: [for (final u in users) _userCard(u)]);
+    final pageCount = (users.length + _pageSize - 1) ~/ _pageSize;
+    final pageUsers = users.skip(_pageIndex * _pageSize).take(_pageSize);
+
+    return Column(
+      children: [
+        for (final u in pageUsers) _userCard(u),
+        if (pageCount > 1)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                tooltip: 'Halaman sebelumnya',
+                onPressed: _pageIndex == 0
+                    ? null
+                    : () => setState(() => _pageIndex--),
+                icon: const Icon(Icons.chevron_left),
+              ),
+              Text(
+                'Halaman ${_pageIndex + 1} dari $pageCount',
+                style: const TextStyle(fontSize: 11, color: Ui.muted),
+              ),
+              IconButton(
+                tooltip: 'Halaman berikutnya',
+                onPressed: _pageIndex + 1 >= pageCount
+                    ? null
+                    : () => setState(() => _pageIndex++),
+                icon: const Icon(Icons.chevron_right),
+              ),
+            ],
+          ),
+      ],
+    );
   }
+
+  Widget _filters() => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      const Text(
+        'Filter siswa',
+        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+      ),
+      const SizedBox(height: 6),
+      Row(
+        children: [
+          Expanded(
+            child: EduSelect(
+              hint: _allClasses,
+              value: _classFilter ?? _allClasses,
+              items: [_allClasses, ..._classOptions],
+              onChanged: (value) => setState(() {
+                _classFilter = value == _allClasses ? null : value;
+                _pageIndex = 0;
+              }),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: EduSelect(
+              hint: _allMajors,
+              value: _majorFilter ?? _allMajors,
+              items: [_allMajors, ..._majorOptions],
+              onChanged: (value) => setState(() {
+                _majorFilter = value == _allMajors ? null : value;
+                _pageIndex = 0;
+              }),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: EduSelect(
+              hint: 'Urutkan nama',
+              value: _nameOrder,
+              items: _nameOrderOptions,
+              onChanged: (value) => setState(() {
+                _nameOrder = value ?? 'Nama A-Z';
+                _pageIndex = 0;
+              }),
+            ),
+          ),
+        ],
+      ),
+    ],
+  );
 
   Widget _userCard(UserModel u) {
     return Padding(
@@ -215,10 +354,7 @@ class _UserListPageState extends State<UserListPage> {
                     color: Ui.navy,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.lock_reset,
-                    color: Colors.white,
-                  ),
+                  child: const Icon(Icons.lock_reset, color: Colors.white),
                 ),
               ),
               const SizedBox(width: 8),
@@ -247,11 +383,24 @@ class _UserListPageState extends State<UserListPage> {
             onChanged: (i) => setState(() {
               tab = i;
               query = '';
+              _classFilter = null;
+              _majorFilter = null;
+              _nameOrder = 'Nama A-Z';
+              _pageIndex = 0;
             }),
           ),
           const SizedBox(height: 12),
-          SearchBox(onChanged: (v) => setState(() => query = v)),
+          SearchBox(
+            onChanged: (v) => setState(() {
+              query = v;
+              _pageIndex = 0;
+            }),
+          ),
           const SizedBox(height: 12),
+          if (tab == 0 && !_loading && _error == null) ...[
+            _filters(),
+            const SizedBox(height: 12),
+          ],
           _content(),
         ],
       ),

@@ -36,4 +36,26 @@ void main() {
 
     expect(user.loginUsername, 'admin-satu');
   });
+
+  test('extracts the student major from the class name', () {
+    final user = UserModel.fromMap({
+      'id_user': 'student-id',
+      'id_role': 3,
+      'nama_lengkap': 'Siswa',
+      'kelas': 'Kelas XII RPL 1',
+    });
+
+    expect(user.jurusan, 'RPL');
+  });
+
+  test('extracts a multi-word major from the class name', () {
+    final user = UserModel.fromMap({
+      'id_user': 'student-id',
+      'id_role': 3,
+      'nama_lengkap': 'Siswa',
+      'kelas': '12 Teknik Industri 2',
+    });
+
+    expect(user.jurusan, 'TEKNIK INDUSTRI');
+  });
 }

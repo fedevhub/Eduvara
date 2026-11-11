@@ -11,24 +11,18 @@ class AdminCourseFormPage extends StatefulWidget {
 }
 
 class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
+  static const int _studentsPerPage = 7;
+
+  // Isi daftar ini saat pilihan filter kelas dan jurusan sudah ditentukan.
+  static const List<String> _studentClassFilters = [];
+  static const List<String> _studentMajorFilters = [];
+
   final _formKey = GlobalKey<FormState>();
   final SupabaseClient _db = Supabase.instance.client;
 
   final name = TextEditingController();
   final desc = TextEditingController();
   final level = TextEditingController();
-
-  // Pilihan tetap form (bukan data transaksi), jadi tidak butuh tabel.
-  static const List<String> _baseSubjects = [
-    'Matematika',
-    'Bahasa Indonesia',
-    'KIK',
-    'Agama',
-    'Pendidikan Pancasila / Kewarganegaraan',
-    'Ilmu Pengetahuan Alam',
-    'Ilmu Pengetahuan Sosial',
-    'Bahasa Inggris',
-  ];
 
   static const List<String> _baseLevels = [
     'Kelas 7',
@@ -39,7 +33,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     'Kelas 12',
   ];
 
-  List<String> _subjects = List.of(_baseSubjects);
   List<String> _levels = List.of(_baseLevels);
 
   String? subject;
@@ -52,6 +45,10 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   bool _loading = true;
   bool _saving = false;
   String _studentQuery = '';
+  String? _selectedStudentClass;
+  String? _selectedStudentMajor;
+  String _studentNameOrder = 'Nama A-Z';
+  int _studentPage = 0;
 
   final Set<String> selectedStudents = {};
 
@@ -75,18 +72,126 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   List<Map<String, dynamic>> get filteredStudents {
     final query = _studentQuery.trim().toLowerCase();
-
-    if (query.isEmpty) return availableStudents;
-
-    return availableStudents.where((user) {
+    final students = availableStudents.where((user) {
       final fullName = (user['full_name'] ?? '').toString().toLowerCase();
-
-      final detail = (user['class_name'] ?? user['grade_level'] ?? '')
-          .toString()
-          .toLowerCase();
-
-      return fullName.contains(query) || detail.contains(query);
+      final className = _className(user).toLowerCase();
+      final major = _majorForStudent(user).toLowerCase();
+      final matchesSearch =
+          query.isEmpty ||
+          fullName.contains(query) ||
+          className.contains(query) ||
+          major.contains(query);
+      final matchesClass =
+          _selectedStudentClass == null ||
+          _className(user) == _selectedStudentClass;
+      final matchesMajor =
+          _selectedStudentMajor == null ||
+          _majorForStudent(user).toUpperCase() ==
+              _selectedStudentMajor!.toUpperCase();
+      return matchesSearch && matchesClass && matchesMajor;
     }).toList();
+
+    students.sort((first, second) {
+      final byName = _studentName(
+        first,
+      ).toLowerCase().compareTo(_studentName(second).toLowerCase());
+      return _studentNameOrder == 'Nama Z-A' ? -byName : byName;
+    });
+
+    return students;
+  }
+
+  int get _studentPageCount =>
+      (filteredStudents.length / _studentsPerPage).ceil().clamp(1, 1 << 31);
+
+  List<Map<String, dynamic>> get _studentsOnCurrentPage {
+    final start = _studentPage * _studentsPerPage;
+    if (start >= filteredStudents.length) return const [];
+    final end = (start + _studentsPerPage).clamp(0, filteredStudents.length);
+    return filteredStudents.sublist(start, end);
+  }
+
+  String _studentName(Map<String, dynamic> student) =>
+      (student['full_name'] ?? 'Tanpa nama').toString();
+
+  String _className(Map<String, dynamic> student) =>
+      (student['class_name'] ?? student['grade_level'] ?? 'Siswa').toString();
+
+  String _majorForStudent(Map<String, dynamic> student) {
+    final className = _className(student).trim();
+    if (className.isEmpty || className == 'Siswa') return '-';
+
+    const classLabels = {
+      'KELAS',
+      'I',
+      'II',
+      'III',
+      'IV',
+      'V',
+      'VI',
+      'VII',
+      'VIII',
+      'IX',
+      'X',
+      'XI',
+      'XII',
+    };
+    final majorParts = className.toUpperCase().split(RegExp(r'\s+')).where((
+      part,
+    ) {
+      return !classLabels.contains(part) && !RegExp(r'^\d+$').hasMatch(part);
+    });
+    final major = majorParts.join(' ');
+    return major.isEmpty ? '-' : major;
+  }
+
+  Widget _studentFilterDropdown({
+    required String hint,
+    required String? value,
+    required List<String> options,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      isExpanded: true,
+      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Ui.muted),
+      style: const TextStyle(fontSize: 14, color: Ui.text),
+      decoration: InputDecoration(
+        isDense: true,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 16,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Ui.line),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: Ui.blue, width: 1.5),
+        ),
+      ),
+      hint: Text(hint, style: const TextStyle(fontSize: 14, color: Ui.text)),
+      items: [
+        DropdownMenuItem<String>(value: null, child: Text(hint)),
+        ...options.map(
+          (option) => DropdownMenuItem<String>(
+            value: option,
+            child: Text(option, overflow: TextOverflow.ellipsis),
+          ),
+        ),
+      ],
+      onChanged: onChanged,
+    );
+  }
+
+  void _updateStudentFilter(VoidCallback update) {
+    setState(() {
+      update();
+      _studentPage = 0;
+    });
   }
 
   @override
@@ -133,7 +238,9 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
             .order('full_name'),
       );
       final userRows = List<Map<String, dynamic>>.from(
-        await _db.from('user').select('id_user, nama_lengkap, kelas, status'),
+        await _db
+            .from('user')
+            .select('id_user, nama_lengkap, nip, kelas, status'),
       );
       final userDetails = {
         for (final row in userRows) row['id_user'].toString(): row,
@@ -142,7 +249,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
         return _isActiveAccount(userDetails[row['id'].toString()]);
       }).toList();
 
-      final subjects = List<String>.of(_baseSubjects);
       final levels = List<String>.of(_baseLevels);
 
       if (_editingCourseId != null) {
@@ -154,15 +260,19 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
       if (level.text.isNotEmpty && !levels.contains(level.text)) {
         levels.add(level.text);
       }
-      if (subject != null && !subjects.contains(subject)) {
-        subjects.add(subject!);
-      }
-
       if (!mounted) return;
 
       setState(() {
         _teachers = activeProfiles
             .where((row) => (row['role'] ?? '').toString() == 'teacher')
+            .map((row) {
+              final details = userDetails[row['id'].toString()];
+              return {
+                ...row,
+                'full_name': details?['nama_lengkap'] ?? row['full_name'],
+                'nip': details?['nip'],
+              };
+            })
             .toList();
 
         _students = activeProfiles
@@ -177,7 +287,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
             })
             .toList();
 
-        _subjects = subjects;
         _levels = levels;
 
         if (teacherId != null &&
@@ -421,10 +530,10 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                   const FieldLabel('Mata Pelajaran', required: true),
 
-                  SearchableSelect(
+                  SubjectSelector(
                     hint: 'Pilih mata pelajaran',
                     value: subject,
-                    items: _subjects,
+                    extraSubjects: subject == null ? const [] : [subject!],
                     error: _showErrors && subjectError != null,
                     onChanged: (value) {
                       setState(() => subject = value);
@@ -459,23 +568,15 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                   SearchableSelect(
                     hint: 'Pilih guru pengajar',
-                    value: _selectedTeacherName(),
+                    value: teacherId,
                     items: availableTeachers
-                        .map((user) => (user['full_name'] ?? '').toString())
-                        .where((value) => value.isNotEmpty)
+                        .map((user) => user['id'].toString())
                         .toList(),
-                    subtitle: (teacherName) => 'Guru pengajar',
+                    itemLabel: _teacherNameById,
+                    subtitle: _teacherNipById,
                     error: _showErrors && teacherError != null,
                     onChanged: (value) {
-                      setState(() {
-                        final matches = availableTeachers.where(
-                          (row) => (row['full_name'] ?? '').toString() == value,
-                        );
-
-                        teacherId = matches.isEmpty
-                            ? null
-                            : matches.first['id'].toString();
-                      });
+                      setState(() => teacherId = value);
                     },
                   ),
 
@@ -517,11 +618,11 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                           TextField(
                             onChanged: (value) {
-                              setState(() => _studentQuery = value);
+                              _updateStudentFilter(() => _studentQuery = value);
                             },
                             style: const TextStyle(fontSize: 11),
                             decoration: const InputDecoration(
-                              hintText: 'Cari nama atau kelas siswa',
+                              hintText: 'Cari nama, kelas, atau jurusan siswa',
                               hintStyle: TextStyle(fontSize: 10),
                               prefixIcon: Icon(Icons.search, size: 18),
                               isDense: true,
@@ -529,7 +630,58 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                             ),
                           ),
 
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 14),
+
+                          const Text(
+                            'Filter siswa',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Ui.text,
+                            ),
+                          ),
+
+                          const SizedBox(height: 8),
+
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _studentFilterDropdown(
+                                  hint: 'Kelas',
+                                  value: _selectedStudentClass,
+                                  options: _studentClassFilters,
+                                  onChanged: (value) => _updateStudentFilter(
+                                    () => _selectedStudentClass = value,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _studentFilterDropdown(
+                                  hint: 'Jurusan',
+                                  value: _selectedStudentMajor,
+                                  options: _studentMajorFilters,
+                                  onChanged: (value) => _updateStudentFilter(
+                                    () => _selectedStudentMajor = value,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: _studentFilterDropdown(
+                                  hint: 'Urutkan nama',
+                                  value: _studentNameOrder,
+                                  options: const ['Nama A-Z', 'Nama Z-A'],
+                                  onChanged: (value) => _updateStudentFilter(
+                                    () =>
+                                        _studentNameOrder = value ?? 'Nama A-Z',
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 10),
 
                           if (filteredStudents.isEmpty)
                             const Padding(
@@ -540,7 +692,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                               ),
                             )
                           else
-                            for (final user in filteredStudents)
+                            for (final user in _studentsOnCurrentPage)
                               CheckboxListTile(
                                 value: selectedStudents.contains(
                                   user['id'].toString(),
@@ -555,10 +707,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                                   style: const TextStyle(fontSize: 11),
                                 ),
                                 subtitle: Text(
-                                  (user['class_name'] ??
-                                          user['grade_level'] ??
-                                          'Siswa')
-                                      .toString(),
+                                  '${_className(user)} • ${_majorForStudent(user)}',
                                   style: const TextStyle(fontSize: 9),
                                 ),
                                 onChanged: (checked) {
@@ -573,6 +722,40 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
                                   });
                                 },
                               ),
+
+                          if (filteredStudents.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(
+                                  'Halaman ${_studentPage + 1} dari '
+                                  '$_studentPageCount',
+                                  style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Ui.muted,
+                                  ),
+                                ),
+                                const Spacer(),
+                                IconButton(
+                                  tooltip: 'Halaman sebelumnya',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.chevron_left),
+                                  onPressed: _studentPage == 0
+                                      ? null
+                                      : () => setState(() => _studentPage--),
+                                ),
+                                IconButton(
+                                  tooltip: 'Halaman berikutnya',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.chevron_right),
+                                  onPressed:
+                                      _studentPage >= _studentPageCount - 1
+                                      ? null
+                                      : () => setState(() => _studentPage++),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -610,12 +793,21 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     );
   }
 
-  String? _selectedTeacherName() {
-    if (teacherId == null) return null;
-
+  String _teacherNameById(String id) {
     for (final user in availableTeachers) {
-      if (user['id'].toString() == teacherId) {
+      if (user['id'].toString() == id) {
         return (user['full_name'] ?? '').toString();
+      }
+    }
+
+    return '';
+  }
+
+  String? _teacherNipById(String id) {
+    for (final user in availableTeachers) {
+      if (user['id'].toString() == id) {
+        final nip = user['nip']?.toString().trim();
+        return nip == null || nip.isEmpty ? null : 'NIP: $nip';
       }
     }
 
@@ -623,11 +815,60 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   }
 }
 
+class SubjectSelector extends StatelessWidget {
+  final String hint;
+  final String? value;
+  final List<String> extraSubjects;
+  final ValueChanged<String?> onChanged;
+  final bool error;
+
+  const SubjectSelector({
+    super.key,
+    required this.hint,
+    required this.value,
+    required this.onChanged,
+    this.extraSubjects = const [],
+    this.error = false,
+  });
+
+  static const List<String> _mainSubjects = [
+    'Matematika',
+    'Bahasa Indonesia',
+    'KIK',
+    'Agama',
+    'Pendidikan Pancasila / Kewarganegaraan',
+    'Ilmu Pengetahuan Alam',
+    'Ilmu Pengetahuan Sosial',
+    'Bahasa Inggris',
+  ];
+
+  static const Map<String, List<String>> _majorSubjects = {
+    'RPL': ['Pemrograman'],
+    'TKJ': ['Jaringan'],
+    'Metro': ['Teknik Industri'],
+    'Elin': ['Kelistrikan'],
+  };
+
+  @override
+  Widget build(BuildContext context) => SearchableSelect(
+    hint: hint,
+    value: value,
+    items: _mainSubjects,
+    filters: _majorSubjects,
+    extraItems: extraSubjects,
+    error: error,
+    onChanged: onChanged,
+  );
+}
+
 class SearchableSelect extends StatelessWidget {
   final String hint;
   final List<String> items;
   final String? value;
   final ValueChanged<String?> onChanged;
+  final Map<String, List<String>>? filters;
+  final List<String> extraItems;
+  final String Function(String item)? itemLabel;
   final String? Function(String item)? subtitle;
   final bool error;
 
@@ -637,6 +878,9 @@ class SearchableSelect extends StatelessWidget {
     required this.items,
     required this.value,
     required this.onChanged,
+    this.filters,
+    this.extraItems = const [],
+    this.itemLabel,
     this.subtitle,
     this.error = false,
   });
@@ -648,6 +892,9 @@ class SearchableSelect extends StatelessWidget {
       builder: (context) => _SearchableOptionsSheet(
         title: hint,
         items: items,
+        filters: filters,
+        extraItems: extraItems,
+        itemLabel: itemLabel,
         subtitle: subtitle,
         selectedValue: value,
       ),
@@ -679,7 +926,7 @@ class SearchableSelect extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  value ?? hint,
+                  value == null ? hint : itemLabel?.call(value!) ?? value!,
                   style: TextStyle(
                     fontSize: value == null ? 11 : 12,
                     color: value == null ? const Color(0xFFB6BFCC) : Ui.text,
@@ -698,12 +945,18 @@ class SearchableSelect extends StatelessWidget {
 class _SearchableOptionsSheet extends StatefulWidget {
   final String title;
   final List<String> items;
+  final Map<String, List<String>>? filters;
+  final List<String> extraItems;
+  final String Function(String item)? itemLabel;
   final String? Function(String item)? subtitle;
   final String? selectedValue;
 
   const _SearchableOptionsSheet({
     required this.title,
     required this.items,
+    required this.filters,
+    required this.extraItems,
+    required this.itemLabel,
     required this.subtitle,
     required this.selectedValue,
   });
@@ -715,15 +968,30 @@ class _SearchableOptionsSheet extends StatefulWidget {
 
 class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
   String query = '';
+  String? selectedFilter;
 
   @override
   Widget build(BuildContext context) {
     final normalizedQuery = query.trim().toLowerCase();
+    final filters = widget.filters;
+    final List<String> filterItems;
+    if (filters == null) {
+      filterItems = widget.items;
+    } else if (selectedFilter == null) {
+      filterItems = [
+        ...widget.items,
+        ...filters.values.expand((subjects) => subjects),
+      ];
+    } else {
+      filterItems = [...filters[selectedFilter] ?? const [], ...widget.items];
+    }
+    final items = {...filterItems, ...widget.extraItems}.toList();
 
-    final filteredItems = widget.items.where((item) {
+    final filteredItems = items.where((item) {
+      final label = widget.itemLabel?.call(item) ?? item;
       final detail = widget.subtitle?.call(item) ?? '';
 
-      return item.toLowerCase().contains(normalizedQuery) ||
+      return label.toLowerCase().contains(normalizedQuery) ||
           detail.toLowerCase().contains(normalizedQuery);
     }).toList();
 
@@ -744,6 +1012,28 @@ class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
                 widget.title,
                 style: const TextStyle(fontWeight: FontWeight.w800),
               ),
+
+              if (filters != null && filters.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Mapel'),
+                      selected: selectedFilter == null,
+                      onSelected: (_) => setState(() => selectedFilter = null),
+                    ),
+                    for (final filter in filters.keys)
+                      ChoiceChip(
+                        label: Text(filter),
+                        selected: selectedFilter == filter,
+                        onSelected: (_) =>
+                            setState(() => selectedFilter = filter),
+                      ),
+                  ],
+                ),
+              ],
 
               const SizedBox(height: 12),
 
@@ -768,10 +1058,11 @@ class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
                         itemCount: filteredItems.length,
                         itemBuilder: (context, index) {
                           final item = filteredItems[index];
+                          final label = widget.itemLabel?.call(item) ?? item;
                           final detail = widget.subtitle?.call(item);
 
                           return ListTile(
-                            title: Text(item),
+                            title: Text(label),
                             subtitle: detail == null ? null : Text(detail),
                             trailing: item == widget.selectedValue
                                 ? const Icon(Icons.check, color: Ui.blue)
