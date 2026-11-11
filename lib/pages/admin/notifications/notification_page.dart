@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../components/notifications/notification_widgets.dart';
 import '../../../components/ui/kit.dart';
+import '../../../core/routes/route_names.dart';
 
 class AdminNotificationPage extends StatefulWidget {
   const AdminNotificationPage({super.key});
@@ -36,7 +37,11 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  void _reload() => setState(() => _notifications = _load());
+  void _reload() {
+    setState(() {
+      _notifications = _load();
+    });
+  }
 
   Future<void> _markAllAsRead() async {
     final userId = _db.auth.currentUser?.id;
@@ -48,7 +53,11 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
           .update({'is_read': true})
           .eq('user_id', userId)
           .eq('is_read', false);
-      if (mounted) setState(() => _notifications = _load());
+      if (mounted) {
+        setState(() {
+          _notifications = _load();
+        });
+      }
     } catch (e) {
       debugPrint('[AdminNotifications] gagal menandai semua dibaca: $e');
       if (mounted) {
@@ -76,6 +85,13 @@ class _AdminNotificationPageState extends State<AdminNotificationPage> {
         item['is_read'] = true;
         _notifications = _load();
       });
+      if (item['title'] == 'Permintaan Reset Password' && mounted) {
+        await Navigator.pushNamed(
+          context,
+          RouteNames.adminPasswordResetRequests,
+        );
+        if (mounted) _reload();
+      }
     } catch (e) {
       debugPrint('[AdminNotifications] gagal menandai dibaca: $e');
       if (mounted) {

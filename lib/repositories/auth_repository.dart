@@ -22,13 +22,43 @@ class AuthRepository {
     }
   }
 
-  Future<AuthUserModel> login(String email, String password) async {
-    final response = await _supabase.auth.signInWithPassword(
-      email: email.trim().toLowerCase(),
-      password: password,
-    );
+  Future<AuthUserModel> login(String username, String password) async {
+    final FunctionResponse response;
+    try {
+      response = await _supabase.functions.invoke(
+        'username-auth',
+        body: {'username': username.trim(), 'password': password},
+      );
+    } on FunctionException catch (error) {
+      final details = error.details;
+      final code = details is Map ? details['code']?.toString() : null;
+      throw AuthException(switch (code) {
+        'reset_pending' => 'reset_pending',
+        'invalid_credentials' => 'invalid_credentials',
+        'account_inactive' => 'account_inactive',
+        'NOT_FOUND' || 'not_found' => 'username_auth_not_deployed',
+        _ => 'Login tidak dapat diproses.',
+      });
+    }
 
-    final authUser = response.user;
+    final result = response.data;
+    if (response.status != 200 || result is! Map || result['code'] != null) {
+      final code = result is Map ? result['code']?.toString() : null;
+      throw AuthException(switch (code) {
+        'reset_pending' => 'reset_pending',
+        'invalid_credentials' => 'invalid_credentials',
+        'account_inactive' => 'account_inactive',
+        'migration_required' => 'username_migration_required',
+        _ => 'Login tidak dapat diproses.',
+      });
+    }
+
+    final refreshToken = result['refresh_token']?.toString();
+    if (refreshToken == null || refreshToken.isEmpty) {
+      throw const AuthException('Login tidak dapat diproses.');
+    }
+    final session = await _supabase.auth.setSession(refreshToken);
+    final authUser = session.user;
 
     if (authUser == null) {
       throw Exception('Login gagal. Silakan coba lagi.');
@@ -37,7 +67,8 @@ class AuthRepository {
     try {
       final profile = await _profileRepository.getProfile(
         userId: authUser.id,
-        email: authUser.email ?? email,
+        email: authUser.email ?? '',
+        username: username,
       );
 
       const validRoles = ['admin', 'teacher', 'student'];
@@ -68,6 +99,7 @@ class AuthRepository {
       return await _profileRepository.getProfile(
         userId: authUser.id,
         email: authUser.email ?? '',
+        username: authUser.userMetadata?['username']?.toString() ?? '',
       );
     } catch (_) {
       await _supabase.auth.signOut();

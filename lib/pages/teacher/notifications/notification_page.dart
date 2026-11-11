@@ -37,7 +37,11 @@ class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
     return List<Map<String, dynamic>>.from(rows);
   }
 
-  void _reload() => setState(() => _notifications = _load());
+  void _reload() {
+    setState(() {
+      _notifications = _load();
+    });
+  }
 
   Future<void> _markAllAsRead() async {
     final userId = _db.auth.currentUser?.id;
@@ -49,7 +53,11 @@ class _TeacherNotificationPageState extends State<TeacherNotificationPage> {
           .update({'is_read': true})
           .eq('user_id', userId)
           .eq('is_read', false);
-      if (mounted) setState(() => _notifications = _load());
+      if (mounted) {
+        setState(() {
+          _notifications = _load();
+        });
+      }
     } catch (e) {
       debugPrint('[TeacherNotifications] gagal menandai semua dibaca: $e');
       if (mounted) {

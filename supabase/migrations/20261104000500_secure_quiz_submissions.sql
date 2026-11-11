@@ -13,6 +13,8 @@ GRANT SELECT ON public.quiz_attempt_answers TO authenticated;
 REVOKE INSERT, UPDATE, DELETE ON public.quiz_attempt_answers
   FROM PUBLIC, anon, authenticated;
 
+DROP POLICY IF EXISTS student_read_own_quiz_attempt_answers
+  ON public.quiz_attempt_answers;
 CREATE POLICY student_read_own_quiz_attempt_answers
   ON public.quiz_attempt_answers
   FOR SELECT
@@ -26,6 +28,8 @@ CREATE POLICY student_read_own_quiz_attempt_answers
     )
   );
 
+DROP POLICY IF EXISTS teacher_read_enrolled_quiz_attempt_answers
+  ON public.quiz_attempt_answers;
 CREATE POLICY teacher_read_enrolled_quiz_attempt_answers
   ON public.quiz_attempt_answers
   FOR SELECT
@@ -51,6 +55,8 @@ DROP POLICY IF EXISTS enrolled_read_quiz_questions
 DROP POLICY IF EXISTS authenticated_manage_quiz_attempts
   ON public.quiz_attempts;
 
+DROP POLICY IF EXISTS student_read_own_quiz_attempts
+  ON public.quiz_attempts;
 CREATE POLICY student_read_own_quiz_attempts
   ON public.quiz_attempts
   FOR SELECT
@@ -121,6 +127,8 @@ CREATE POLICY authenticated_read_courses
     )
   );
 
+DROP POLICY IF EXISTS student_read_enrolled_teacher_profiles
+  ON public.profiles;
 CREATE POLICY student_read_enrolled_teacher_profiles
   ON public.profiles
   FOR SELECT

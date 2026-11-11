@@ -1,0 +1,4 @@
+role,nama_lengkap,username,password,mapel,kelas,status
+student,Contoh Siswa,contoh-siswa,Contoh1234,,12 TKJ 1,inactive
+teacher,Contoh Guru,contoh-guru,Contoh1234,Matematika,,inactive
+admin,Contoh Admin,contoh-admin,Contoh1234,,,inactive

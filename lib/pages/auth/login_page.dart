@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../components/ui/kit.dart';
 import '../../core/routes/route_names.dart';
 import '../../providers/auth_provider.dart';
+import 'password_reset_request_dialog.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,30 +13,65 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final email = TextEditingController();
+  final username = TextEditingController();
   final password = TextEditingController();
   bool hidden = true;
   bool remember = false;
+  static const _rememberedUsernameKey = 'remembered_login_username';
+
+  @override
+  void initState() {
+    super.initState();
+    _restoreRememberedUsername();
+  }
+
+  Future<void> _restoreRememberedUsername() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedUsername = prefs.getString(_rememberedUsernameKey);
+    if (!mounted ||
+        username.text.isNotEmpty ||
+        savedUsername == null ||
+        savedUsername.isEmpty) {
+      return;
+    }
+    setState(() {
+      username.text = savedUsername;
+      remember = true;
+    });
+  }
+
+  Future<void> _saveRememberedUsername(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (value) {
+      final rememberedUsername = username.text.trim();
+      if (rememberedUsername.isNotEmpty) {
+        await prefs.setString(_rememberedUsernameKey, rememberedUsername);
+      }
+    } else {
+      await prefs.remove(_rememberedUsernameKey);
+    }
+  }
 
   @override
   void dispose() {
-    email.dispose();
+    username.dispose();
     password.dispose();
     super.dispose();
   }
 
   Future<void> _submit(AuthProvider auth) async {
-    final emailValue = email.text.trim();
+    final usernameValue = username.text.trim();
     final passwordValue = password.text;
 
-    if (emailValue.isEmpty || passwordValue.isEmpty) {
+    if (usernameValue.isEmpty || passwordValue.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Email dan password wajib diisi.')),
+        const SnackBar(content: Text('Username dan password wajib diisi.')),
       );
       return;
     }
 
-    final success = await auth.login(emailValue, passwordValue);
+    await _saveRememberedUsername(remember);
+    final success = await auth.login(usernameValue, passwordValue);
 
     if (!mounted) return;
 
@@ -56,64 +91,19 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _showForgotPassword() async {
-    final controller = TextEditingController(text: email.text.trim());
-    final resetEmail = await showDialog<String>(
+    final submitted = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Lupa Password'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Email akun'),
+      builder: (_) =>
+          PasswordResetRequestDialog(initialUsername: username.text.trim()),
+    );
+    if (submitted != true || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Permintaan reset password dikirim dan menunggu persetujuan admin.',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('Kirim tautan'),
-          ),
-        ],
       ),
     );
-    controller.dispose();
-    if (resetEmail == null || !mounted) return;
-    if (resetEmail.isEmpty || !resetEmail.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Masukkan email akun yang valid.')),
-      );
-      return;
-    }
-
-    try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(
-        resetEmail,
-        redirectTo: kIsWeb ? Uri.base.origin : 'eduvara://reset-password',
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Jika email terdaftar, tautan reset password telah dikirim.',
-          ),
-        ),
-      );
-    } on AuthException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Gagal mengirim tautan reset: ${error.message}'),
-        ),
-      );
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim tautan reset: $error')),
-      );
-    }
   }
 
   Widget _fieldBox({
@@ -191,7 +181,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 16),
                           const Text(
-                            'Email',
+                            'Username',
                             style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w600,
@@ -199,15 +189,20 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                           const SizedBox(height: 5),
                           _fieldBox(
-                            icon: Icons.mail,
+                            icon: Icons.person_outline,
                             child: TextField(
-                              controller: email,
-                              keyboardType: TextInputType.emailAddress,
+                              key: const ValueKey('login-username-field'),
+                              controller: username,
+                              onChanged: (_) {
+                                if (remember) {
+                                  _saveRememberedUsername(true);
+                                }
+                              },
                               style: const TextStyle(fontSize: 11),
                               decoration: const InputDecoration(
                                 isCollapsed: true,
                                 border: InputBorder.none,
-                                hintText: 'admin@gmail.com',
+                                hintText: 'NISN, NIP, atau username admin',
                                 hintStyle: TextStyle(
                                   fontSize: 11,
                                   color: Color(0xFF9AA5B5),
@@ -258,12 +253,18 @@ class _LoginPageState extends State<LoginPage> {
                                 width: 18,
                                 height: 18,
                                 child: Checkbox(
+                                  key: const ValueKey(
+                                    'remember-login-checkbox',
+                                  ),
                                   value: remember,
                                   visualDensity: VisualDensity.compact,
                                   materialTapTargetSize:
                                       MaterialTapTargetSize.shrinkWrap,
-                                  onChanged: (v) =>
-                                      setState(() => remember = v ?? false),
+                                  onChanged: (v) {
+                                    final selected = v ?? false;
+                                    setState(() => remember = selected);
+                                    _saveRememberedUsername(selected);
+                                  },
                                 ),
                               );
                               const rememberLabel = Text(

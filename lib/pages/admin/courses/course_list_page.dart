@@ -95,7 +95,7 @@ class _CourseListPageState extends State<CourseListPage> {
       });
     }
 
-    try {
+    try { 
       final results = await Future.wait([
         _db.from(_tCourse).select('*'),
         _db.from('enrollments').select('course_id, student_id'),

@@ -72,7 +72,6 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     final name =
         (profile?['full_name'] ??
                 user.userMetadata?['full_name'] ??
-                user.email ??
                 '-')
             .toString();
 

@@ -35,7 +35,7 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
         .single();
     final account = await _db
         .from('user')
-        .select('email, kelas, status')
+        .select('username, nisn, kelas, status')
         .eq('id_user', id)
         .maybeSingle();
     final enrollments = await _db
@@ -63,7 +63,7 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
     return {
       'id': id,
       'full_name': profile['full_name'] ?? '-',
-      'email': account?['email'] ?? '-',
+      'username': account?['nisn'] ?? account?['username'] ?? '-',
       'class_name': account?['kelas'] ?? '-',
       'status': account?['status'] ?? '-',
       'courses': courses
@@ -150,7 +150,7 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
             .map((course) => course.toString())
             .toList();
         final status = student['status']?.toString() ?? '-';
-        final email = student['email']?.toString() ?? '-';
+        final username = student['username']?.toString() ?? '-';
 
         return Scaffold(
           backgroundColor: Ui.bg,
@@ -194,7 +194,7 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
                         ),
                       ),
                       Text(
-                        email,
+                        username,
                         style: const TextStyle(
                           fontSize: 10,
                           color: Colors.white,
@@ -221,7 +221,7 @@ class _TeacherStudentDetailPageState extends State<TeacherStudentDetailPage> {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            _info('Email', email),
+                            _info('Username', username),
                             _info('Role', 'Siswa'),
                             _info('Status', status),
                             _info(

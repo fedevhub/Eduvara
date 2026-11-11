@@ -20,6 +20,7 @@ class RouteNames {
   static const adminQuestionForm = '/admin/quizzes/questions/form';
   static const adminNotifications = '/admin/notifications';
   static const adminProfile = '/admin/profile';
+  static const adminPasswordResetRequests = '/admin/password-reset-requests';
 
   // Teacher
   static const teacherDashboard = '/teacher/dashboard';

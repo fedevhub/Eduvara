@@ -17,9 +17,8 @@ class _UserFormPageState extends State<UserFormPage> {
   final UserRepository _repo = UserRepository();
 
   final name = TextEditingController();
-  final email = TextEditingController();
+  final username = TextEditingController();
   final password = TextEditingController();
-  final nip = TextEditingController();
   final kelas = TextEditingController();
 
   static const Map<String, String> _roleValues = {
@@ -84,8 +83,7 @@ class _UserFormPageState extends State<UserFormPage> {
       final u = await _repo.getUser(_editingId!);
       _old = u;
       name.text = u.name;
-      email.text = u.email;
-      nip.text = u.nip ?? '';
+      username.text = u.loginUsername;
       mapel = (u.mapel?.isNotEmpty ?? false) ? u.mapel : null;
       kelas.text = u.kelas ?? '';
       active = u.isActive;
@@ -106,22 +104,14 @@ class _UserFormPageState extends State<UserFormPage> {
   @override
   void dispose() {
     name.dispose();
-    email.dispose();
+    username.dispose();
     password.dispose();
-    nip.dispose();
     kelas.dispose();
     super.dispose();
   }
 
   String? _vName() =>
       name.text.trim().isEmpty ? 'Nama lengkap wajib diisi' : null;
-
-  String? _vEmail() {
-    final v = email.text.trim();
-    if (v.isEmpty) return 'Email wajib diisi';
-    if (!v.contains('@') || !v.contains('.')) return 'Format email tidak valid';
-    return null;
-  }
 
   String? _vPassword() {
     final v = password.text;
@@ -132,8 +122,8 @@ class _UserFormPageState extends State<UserFormPage> {
 
   String? _vRole() => _role == null ? 'Role wajib dipilih' : null;
 
-  String? _vNip() =>
-      _role == 'teacher' && nip.text.trim().isEmpty ? 'NIP wajib diisi' : null;
+  String? _vUsername() =>
+      username.text.trim().isEmpty ? 'Username wajib diisi' : null;
 
   String? _vMapel() => _role == 'teacher' && (mapel == null || mapel!.isEmpty)
       ? 'Mata pelajaran wajib dipilih'
@@ -166,10 +156,9 @@ class _UserFormPageState extends State<UserFormPage> {
 
     final hasError = [
       _vName(),
-      _vEmail(),
+      _vUsername(),
       _vPassword(),
       _vRole(),
-      _vNip(),
       _vMapel(),
       _vKelas(),
     ].any((e) => e != null);
@@ -182,21 +171,19 @@ class _UserFormPageState extends State<UserFormPage> {
         await _repo.updateUser(
           old: _old!,
           name: name.text.trim(),
-          email: email.text.trim(),
+          username: username.text.trim(),
           role: _role!,
           active: active,
-          nip: nip.text.trim(),
           mapel: mapel,
           kelas: kelas.text.trim(),
         );
       } else {
         await _repo.createUser(
           name: name.text.trim(),
-          email: email.text.trim(),
+          username: username.text.trim(),
           password: password.text,
           role: _role!,
           active: active,
-          nip: nip.text.trim(),
           mapel: mapel,
           kelas: kelas.text.trim(),
         );
@@ -253,14 +240,18 @@ class _UserFormPageState extends State<UserFormPage> {
                 ),
                 _err(_vName()),
 
-                const FieldLabel('Email'),
+                const FieldLabel('Username'),
                 EduField(
-                  controller: email,
-                  hint: 'nama@eduvara.id',
-                  keyboardType: TextInputType.emailAddress,
-                  error: _showErrors && _vEmail() != null,
+                  controller: username,
+                  hint: switch (_role) {
+                    'student' => 'Masukkan NISN siswa',
+                    'teacher' => 'Masukkan NIP guru',
+                    'admin' => 'Tentukan username admin',
+                    _ => 'Pilih role, lalu masukkan username',
+                  },
+                  error: _showErrors && _vUsername() != null,
                 ),
-                _err(_vEmail()),
+                _err(_vUsername()),
 
                 if (!_edit) ...[
                   const FieldLabel('Password'),
@@ -282,16 +273,8 @@ class _UserFormPageState extends State<UserFormPage> {
                 ),
                 _err(_vRole()),
 
-                // Guru: NIP + Mapel
+                // Guru: username adalah NIP.
                 if (_role == 'teacher') ...[
-                  const FieldLabel('NIP'),
-                  EduField(
-                    controller: nip,
-                    hint: 'Masukkan NIP',
-                    keyboardType: TextInputType.number,
-                    error: _showErrors && _vNip() != null,
-                  ),
-                  _err(_vNip()),
                   const FieldLabel('Mata Pelajaran'),
                   SearchableSelect(
                     hint: 'Pilih mata pelajaran',

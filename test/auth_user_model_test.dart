@@ -22,7 +22,7 @@ void main() {
       'role': ' Siswa ',
     }, 'siswa@example.com');
 
-    expect(model.name, 'siswa@example.com');
+    expect(model.name, '-');
     expect(model.role, 'student');
   });
 }

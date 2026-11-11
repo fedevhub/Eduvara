@@ -17,13 +17,13 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> login(String email, String password) async {
+  Future<bool> login(String username, String password) async {
     loading = true;
     errorMessage = null;
     notifyListeners();
 
     try {
-      user = await repository.login(email, password);
+      user = await repository.login(username, password);
       return true;
     } catch (e, stackTrace) {
       debugPrint('[AuthProvider] Login gagal: $e');
@@ -69,7 +69,23 @@ class AuthProvider extends ChangeNotifier {
 
     if (normalized.contains('invalid login credentials') ||
         normalized.contains('invalid_credentials')) {
-      return 'Email atau password salah.';
+      return 'Username atau password salah.';
+    }
+
+    if (normalized.contains('reset_pending')) {
+      return 'Permintaan reset password sedang menunggu persetujuan admin.';
+    }
+
+    if (normalized.contains('username_auth_not_deployed')) {
+      return 'Fitur login username belum aktif. Deploy fungsi username-auth.';
+    }
+
+    if (normalized.contains('username_migration_required')) {
+      return 'Database username belum disiapkan. Terapkan migrasi terbaru.';
+    }
+
+    if (normalized.contains('account_inactive')) {
+      return 'Akun kamu dinonaktifkan. Hubungi admin.';
     }
 
     if ((error is PostgrestException && error.code == 'PGRST116') ||
@@ -84,11 +100,6 @@ class AuthProvider extends ChangeNotifier {
         normalized.contains('handshakeexception') ||
         normalized.contains('xmlhttprequest error')) {
       return 'Tidak dapat terhubung ke internet.';
-    }
-
-    if (normalized.contains('email not confirmed') ||
-        normalized.contains('email_not_confirmed')) {
-      return 'Silakan verifikasi email akun kamu.';
     }
 
     if (normalized.contains('dinonaktifkan')) {

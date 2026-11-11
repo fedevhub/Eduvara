@@ -16,10 +16,9 @@ class UserCsvImportDialog extends StatefulWidget {
 class _UserCsvImportRow {
   final int rowNumber;
   final String name;
-  final String email;
+  final String username;
   final String password;
   final String role;
-  final String? nip;
   final String? mapel;
   final String? kelas;
   final bool active;
@@ -30,10 +29,9 @@ class _UserCsvImportRow {
   _UserCsvImportRow({
     required this.rowNumber,
     required this.name,
-    required this.email,
+    required this.username,
     required this.password,
     required this.role,
-    required this.nip,
     required this.mapel,
     required this.kelas,
     required this.active,
@@ -45,7 +43,6 @@ class _UserCsvImportRow {
 
 class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
   final _repository = UserRepository();
-  final _emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
   List<_UserCsvImportRow> _rows = [];
   String? _fileName;
   String? _error;
@@ -60,10 +57,9 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
     'nama_lengkap': 'name',
     'name': 'name',
     'full_name': 'name',
-    'email': 'email',
+    'username': 'username',
     'password': 'password',
     'kata_sandi': 'password',
-    'nip': 'nip',
     'mapel': 'mapel',
     'mata_pelajaran': 'mapel',
     'subject': 'mapel',
@@ -105,7 +101,7 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
       final headers = parsed.first
           .map((header) => _headerAliases[_normalizeHeader(header)] ?? '')
           .toList();
-      const requiredHeaders = {'role', 'name', 'email', 'password'};
+      const requiredHeaders = {'role', 'name', 'username', 'password'};
       final missing = requiredHeaders.difference(headers.toSet());
       if (missing.isNotEmpty) {
         throw FormatException(
@@ -114,7 +110,7 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
       }
 
       final rows = <_UserCsvImportRow>[];
-      final emails = <String, List<_UserCsvImportRow>>{};
+      final usernames = <String, List<_UserCsvImportRow>>{};
       for (var index = 1; index < parsed.length; index++) {
         final values = parsed[index];
         final errors = <String>[];
@@ -133,12 +129,12 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
         final role = switch (roleValue) {
           'teacher' || 'guru' => 'teacher',
           'student' || 'siswa' => 'student',
+          'admin' => 'admin',
           _ => '',
         };
         final name = fields['name'] ?? '';
-        final email = (fields['email'] ?? '').toLowerCase();
+        final username = (fields['username'] ?? '').trim().toLowerCase();
         final password = fields['password'] ?? '';
-        final nip = fields['nip'];
         final mapel = fields['mapel'];
         final kelas = fields['kelas'];
         final status = (fields['status']?.isNotEmpty ?? false)
@@ -151,17 +147,14 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
         };
 
         if (role.isEmpty) {
-          errors.add('Role harus teacher/guru atau student/siswa.');
+          errors.add('Role harus admin, teacher/guru, atau student/siswa.');
         }
         if (name.isEmpty) errors.add('Nama lengkap wajib diisi.');
-        if (!_emailPattern.hasMatch(email)) {
-          errors.add('Format email tidak valid.');
+        if (username.isEmpty) {
+          errors.add('Username wajib diisi.');
         }
         if (password.length < 6) {
           errors.add('Password minimal 6 karakter.');
-        }
-        if (role == 'teacher' && (nip == null || nip.isEmpty)) {
-          errors.add('NIP wajib diisi untuk guru.');
         }
         if (role == 'teacher' && (mapel == null || mapel.isEmpty)) {
           errors.add('Mata pelajaran wajib diisi untuk guru.');
@@ -176,34 +169,35 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
         final row = _UserCsvImportRow(
           rowNumber: index + 1,
           name: name,
-          email: email,
+          username: username,
           password: password,
           role: role,
-          nip: nip,
           mapel: mapel,
           kelas: kelas,
           active: active ?? true,
           errors: errors,
         );
-        if (email.isNotEmpty) emails.putIfAbsent(email, () => []).add(row);
+        if (username.isNotEmpty) {
+          usernames.putIfAbsent(username, () => []).add(row);
+        }
         rows.add(row);
       }
 
-      for (final duplicates in emails.values.where(
+      for (final duplicates in usernames.values.where(
         (items) => items.length > 1,
       )) {
         for (final duplicate in duplicates) {
-          duplicate.errors.add('Email duplikat di dalam file CSV.');
+          duplicate.errors.add('Username duplikat di dalam file CSV.');
         }
       }
 
       final existing = await _repository.getUsers();
-      final existingEmails = existing
-          .map((user) => user.email.trim().toLowerCase())
+      final existingUsernames = existing
+          .map((user) => user.loginUsername.trim().toLowerCase())
           .toSet();
       for (final row in rows) {
-        if (existingEmails.contains(row.email)) {
-          row.errors.add('Email sudah terdaftar.');
+        if (existingUsernames.contains(row.username)) {
+          row.errors.add('Username sudah terdaftar.');
         }
       }
 
@@ -242,11 +236,10 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
       try {
         await _repository.createUser(
           name: row.name,
-          email: row.email,
+          username: row.username,
           password: row.password,
           role: row.role,
           active: row.active,
-          nip: row.nip,
           mapel: row.mapel,
           kelas: row.kelas,
         );
@@ -273,7 +266,7 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
             style: const TextStyle(fontWeight: FontWeight.w700),
           ),
           Text(
-            '${row.email} • ${row.role.isEmpty ? 'role tidak valid' : row.role}',
+            '${row.username} • ${row.role.isEmpty ? 'role tidak valid' : row.role}',
           ),
           if (row.imported)
             const Text(
@@ -306,8 +299,9 @@ class _UserCsvImportDialogState extends State<UserCsvImportDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Header wajib: role, nama_lengkap, email, password. '
-            'Guru juga memerlukan nip dan mapel; siswa memerlukan kelas. '
+            'Header wajib: role, nama_lengkap, username, password. '
+            'Siswa gunakan NISN, guru gunakan NIP, admin bebas memilih username. '
+            'Guru juga memerlukan mapel; siswa memerlukan kelas. '
             'Kolom status bersifat opsional dan default-nya active.',
           ),
           const SizedBox(height: 12),

@@ -41,7 +41,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
 
     final userData = await _db
         .from('user')
-        .select('nama_lengkap, email, status, kelas, created_at')
+        .select('nama_lengkap, username, nisn, status, kelas, created_at')
         .eq('id_user', user.id)
         .maybeSingle();
 
@@ -51,7 +51,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
           userData?['nama_lengkap'] ??
           user.userMetadata?['full_name'] ??
           '-',
-      'email': user.email ?? userData?['email'] ?? '-',
+      'username': userData?['nisn'] ?? userData?['username'] ?? '-',
       'role': data?['role'] ?? 'student',
       'status': userData?['status'],
       'class_name': userData?['kelas'],
@@ -128,7 +128,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
     }
   }
 
-  Widget _profileHeader(String name, String email) => Container(
+  Widget _profileHeader(String name, String username) => Container(
     width: double.infinity,
     padding: EdgeInsets.fromLTRB(
       20,
@@ -158,7 +158,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
             color: Colors.white,
           ),
         ),
-        Text(email, style: const TextStyle(fontSize: 10, color: Colors.white)),
+        Text(
+          username,
+          style: const TextStyle(fontSize: 10, color: Colors.white),
+        ),
       ],
     ),
   );
@@ -211,7 +214,10 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
         return SingleChildScrollView(
           child: Column(
             children: [
-              _profileHeader(p['full_name'].toString(), p['email'].toString()),
+              _profileHeader(
+                p['full_name'].toString(),
+                p['username'].toString(),
+              ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
@@ -229,7 +235,7 @@ class _StudentProfilePageState extends State<StudentProfilePage> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          _Row('Email', p['email'].toString()),
+                          _Row('Username', p['username'].toString()),
                           _Row('Role', _role(p['role'])),
                           _Row('Status', _status(p['status'])),
                           _Row('Kelas', p['class_name']?.toString() ?? '-'),

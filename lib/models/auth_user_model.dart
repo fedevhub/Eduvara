@@ -1,17 +1,23 @@
 class AuthUserModel {
   final String id;
   final String email;
+  final String username;
   final String name;
   final String role;
 
   const AuthUserModel({
     required this.id,
     required this.email,
+    this.username = '',
     required this.name,
     required this.role,
   });
 
-  factory AuthUserModel.fromMap(Map<String, dynamic> map, String email) {
+  factory AuthUserModel.fromMap(
+    Map<String, dynamic> map,
+    String email, {
+    String username = '',
+  }) {
     final legacyRole = map['id_role'];
     final roleFromId = switch (int.tryParse(legacyRole?.toString() ?? '')) {
       1 => 'admin',
@@ -30,7 +36,11 @@ class AuthUserModel {
     return AuthUserModel(
       id: (map['id'] ?? map['id_user']).toString(),
       email: (map['email'] ?? email).toString(),
-      name: (map['full_name'] ?? map['nama_lengkap'] ?? email).toString(),
+      username: (map['username'] ?? username).toString(),
+      name: (map['full_name'] ??
+              map['nama_lengkap'] ??
+              (username.isEmpty ? '-' : username))
+          .toString(),
       role: role,
     );
   }

@@ -62,7 +62,7 @@ class _TeacherStudentListPageState extends State<TeacherStudentListPage> {
         .order('full_name');
     final accountRows = await _db
         .from('user')
-        .select('id_user, email, kelas, status')
+        .select('id_user, username, nisn, kelas, status')
         .inFilter('id_user', studentIds);
     final accounts = {
       for (final account in accountRows) account['id_user'].toString(): account,
@@ -73,7 +73,8 @@ class _TeacherStudentListPageState extends State<TeacherStudentListPage> {
       final account = accounts[id];
       return {
         ...profile,
-        'email': account?['email']?.toString() ?? '-',
+        'username': (account?['nisn'] ?? account?['username'])?.toString() ??
+            '-',
         'class_name': account?['kelas']?.toString() ?? '-',
         'status': account?['status']?.toString() ?? '-',
         'courses': (coursesByStudent[id] ?? {}).toList()..sort(),
@@ -132,8 +133,9 @@ class _TeacherStudentListPageState extends State<TeacherStudentListPage> {
               final name = (student['full_name'] ?? '')
                   .toString()
                   .toLowerCase();
-              final email = (student['email'] ?? '').toString().toLowerCase();
-              return name.contains(query) || email.contains(query);
+              final username =
+                  (student['username'] ?? '').toString().toLowerCase();
+              return name.contains(query) || username.contains(query);
             }).toList();
             if (students.isEmpty) {
               return const Padding(
@@ -181,6 +183,13 @@ class _TeacherStudentListPageState extends State<TeacherStudentListPage> {
                                 ),
                                 Text(
                                   student['class_name']?.toString() ?? '-',
+                                  style: const TextStyle(
+                                    fontSize: 8.5,
+                                    color: Ui.muted,
+                                  ),
+                                ),
+                                Text(
+                                  student['username']?.toString() ?? '-',
                                   style: const TextStyle(
                                     fontSize: 8.5,
                                     color: Ui.muted,

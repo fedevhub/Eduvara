@@ -12,6 +12,7 @@ import '../../pages/admin/materials/material_form_page.dart';
 import '../../pages/admin/materials/material_list_page.dart';
 import '../../pages/admin/notifications/notification_page.dart';
 import '../../pages/admin/profile/admin_profile_page.dart';
+import '../../pages/admin/profile/password_reset_requests_page.dart';
 import '../../pages/admin/quizzes/question_form_page.dart';
 import '../../pages/admin/quizzes/quiz_detail_page.dart';
 import '../../pages/admin/quizzes/quiz_form_page.dart';
@@ -77,6 +78,8 @@ class AppRouter {
     RouteNames.adminQuestionForm => const AdminQuestionFormPage(),
     RouteNames.adminNotifications => const AdminNotificationPage(),
     RouteNames.adminProfile => const AdminProfilePage(),
+    RouteNames.adminPasswordResetRequests =>
+      const PasswordResetRequestsPage(),
 
     // Teacher
     RouteNames.teacherDashboard => const TeacherDashboardPage(),

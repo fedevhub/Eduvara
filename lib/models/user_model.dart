@@ -2,7 +2,8 @@ class UserModel {
   final String id;
   final int idRole;
   final String name;
-  final String email;
+  final String? username;
+  final String? nisn;
   final String status;
   final String? nip;
   final String? mapel;
@@ -13,7 +14,8 @@ class UserModel {
     required this.id,
     required this.idRole,
     required this.name,
-    required this.email,
+    this.username,
+    this.nisn,
     this.status = 'aktif',
     this.nip,
     this.mapel,
@@ -39,6 +41,12 @@ class UserModel {
 
   String get role => roleForId(idRole);
 
+  String get loginUsername => switch (role) {
+    'student' => nisn?.isNotEmpty == true ? nisn! : username ?? '',
+    'teacher' => nip?.isNotEmpty == true ? nip! : username ?? '',
+    _ => username ?? '',
+  };
+
   String get roleLabel => switch (role) {
     'admin' => 'Admin',
     'teacher' => 'Guru',
@@ -54,7 +62,8 @@ class UserModel {
     id: m['id_user'].toString(),
     idRole: (m['id_role'] as num?)?.toInt() ?? 3,
     name: (m['nama_lengkap'] ?? '').toString(),
-    email: (m['email'] ?? '').toString(),
+    username: m['username']?.toString(),
+    nisn: m['nisn']?.toString(),
     status: (m['status'] ?? 'aktif').toString(),
     nip: m['nip']?.toString(),
     mapel: m['mapel']?.toString(),

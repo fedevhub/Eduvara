@@ -1,6 +1,6 @@
 class MockUser {
   final String name;
-  final String email;
+  final String username;
   final String info;
   final String role;
   final bool active;
@@ -8,7 +8,7 @@ class MockUser {
 
   const MockUser(
     this.name,
-    this.email,
+    this.username,
     this.info,
     this.role,
     this.active, [
@@ -19,35 +19,35 @@ class MockUser {
 final List<MockUser> mockSiswa = [
   const MockUser(
     'Fitri Rachmania',
-    'fitri123@eduvara.id',
+    '0081234567',
     'Kelas 12 RPL',
     'Siswa',
     true,
   ),
   const MockUser(
     'Aprilia Kananti',
-    'aprilia456@eduvara.id',
+    '0082345678',
     'Kelas 11',
     'Siswa',
     true,
   ),
   const MockUser(
     'Josico Devan',
-    'josico789@eduvara.id',
+    '0083456789',
     'Kelas 10',
     'Siswa',
     false,
   ),
   const MockUser(
     'Ahmad Bintang',
-    'bintang835@eduvara.id',
+    '0084567890',
     'Kelas 11',
     'Siswa',
     true,
   ),
   const MockUser(
     'Bunga Lestari',
-    'bunga098@eduvara.id',
+    '0085678901',
     'Kelas 12',
     'Siswa',
     true,
@@ -57,28 +57,28 @@ final List<MockUser> mockSiswa = [
 final List<MockUser> mockGuru = [
   const MockUser(
     'Budi Santoso',
-    'budi.santoso@eduvara.id',
+    '198712312010011001',
     'Matematika',
     'Guru',
     true,
   ),
   const MockUser(
     'Dewi Kurniawan',
-    'dewi.kurniawan@eduvara.id',
+    '198802012011012002',
     'Bahasa Indonesia',
     'Guru',
     true,
   ),
   const MockUser(
     'Reza Pratama',
-    'reza.pratama@eduvara.id',
+    '198903032012011003',
     'KIK',
     'Guru',
     false,
   ),
   const MockUser(
     'Laila Aminah',
-    'laila.aminah@eduvara.id',
+    '199004042013012004',
     'Agama',
     'Guru',
     false,
@@ -86,8 +86,8 @@ final List<MockUser> mockGuru = [
 ];
 
 final List<MockUser> mockAdmin = [
-  const MockUser('Ahmad Fajar', 'ahmad@eduvara.id', 'Admin', 'Admin', true),
-  const MockUser('Fani Pertiwi', 'fani@eduvara.id', 'Admin', 'Admin', true),
+  const MockUser('Ahmad Fajar', 'admin-satu', 'Admin', 'Admin', true),
+  const MockUser('Fani Pertiwi', 'admin-dua', 'Admin', 'Admin', true),
 ];
 
 List<MockUser> get allMockUsers => [...mockSiswa, ...mockGuru, ...mockAdmin];

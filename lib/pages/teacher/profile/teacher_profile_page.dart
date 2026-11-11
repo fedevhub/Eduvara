@@ -37,7 +37,7 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
 
     final account = await _db
         .from('user')
-        .select('email, nip, mapel, status')
+        .select('username, nip, mapel, status')
         .eq('id_user', user.id)
         .maybeSingle();
 
@@ -45,9 +45,8 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
       'name':
           profile['full_name'] ??
           user.userMetadata?['full_name'] ??
-          user.email ??
           '-',
-      'email': user.email ?? account?['email'] ?? '-',
+      'username': account?['nip'] ?? account?['username'] ?? '-',
       'nip': account?['nip'] ?? '-',
       'subject': account?['mapel'] ?? '-',
       'status': account?['status'] ?? '-',
@@ -81,7 +80,7 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
     }
   }
 
-  Widget _profileHeader(String name, String email) => Container(
+  Widget _profileHeader(String name, String username) => Container(
     width: double.infinity,
     padding: EdgeInsets.fromLTRB(
       20,
@@ -107,7 +106,10 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
             color: Colors.white,
           ),
         ),
-        Text(email, style: const TextStyle(fontSize: 10, color: Colors.white)),
+        Text(
+          username,
+          style: const TextStyle(fontSize: 10, color: Colors.white),
+        ),
       ],
     ),
   );
@@ -157,7 +159,7 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
         return SingleChildScrollView(
           child: Column(
             children: [
-              _profileHeader(name, profile['email'].toString()),
+              _profileHeader(name, profile['username'].toString()),
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                 child: Column(
@@ -175,9 +177,8 @@ class _TeacherProfilePageState extends State<TeacherProfilePage> {
                             ),
                           ),
                           const SizedBox(height: 8),
-                          _Row('Email', profile['email'].toString()),
+                          _Row('Username', profile['username'].toString()),
                           const _Row('Role', 'Guru'),
-                          _Row('NIP', profile['nip'].toString()),
                           _Row('Mapel', profile['subject'].toString()),
                           _Row(
                             'Status',

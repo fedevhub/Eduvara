@@ -62,7 +62,7 @@ class _UserListPageState extends State<UserListPage> {
       if (u.role != role) return false;
       if (q.isEmpty) return true;
       return u.name.toLowerCase().contains(q) ||
-          u.email.toLowerCase().contains(q);
+          u.loginUsername.toLowerCase().contains(q);
     }).toList();
   }
 
@@ -88,6 +88,11 @@ class _UserListPageState extends State<UserListPage> {
       builder: (_) => const UserCsvImportDialog(),
     );
     if (imported == true) await _load();
+  }
+
+  Future<void> _openPasswordResetRequests() async {
+    await Navigator.pushNamed(context, RouteNames.adminPasswordResetRequests);
+    if (mounted) await _load();
   }
 
   Future<void> _openDetail(UserModel u) async {
@@ -158,9 +163,9 @@ class _UserListPageState extends State<UserListPage> {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
-                  if (u.email.isNotEmpty)
+                  if (u.loginUsername.isNotEmpty)
                     Text(
-                      u.email,
+                      u.loginUsername,
                       style: const TextStyle(fontSize: 8, color: Ui.muted),
                     ),
                   Text(
@@ -199,6 +204,22 @@ class _UserListPageState extends State<UserListPage> {
             children: [
               Expanded(
                 child: PageTitle('Manajemen Pengguna', onAdd: _openForm),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: _openPasswordResetRequests,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Ui.navy,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.lock_reset,
+                    color: Colors.white,
+                  ),
+                ),
               ),
               const SizedBox(width: 8),
               GestureDetector(

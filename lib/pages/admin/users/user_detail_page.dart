@@ -205,7 +205,7 @@ class _UserDetailPageState extends State<UserDetailPage> {
                     ),
                   ),
                   Text(
-                    user.email,
+                    user.loginUsername,
                     style: const TextStyle(fontSize: 10, color: Colors.white),
                   ),
                 ],
@@ -229,11 +229,10 @@ class _UserDetailPageState extends State<UserDetailPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        _row('Email', user.email),
+                        _row('Username', user.loginUsername),
                         _row('Role', user.roleLabel),
                         _row('Status', active ? 'Aktif' : 'Nonaktif'),
                         if (user.role == 'teacher') ...[
-                          _row('NIP', user.nip ?? '-'),
                           _row('Mapel', user.mapel ?? '-'),
                         ],
                         if (user.role == 'student')

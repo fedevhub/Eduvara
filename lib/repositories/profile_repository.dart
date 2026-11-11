@@ -8,6 +8,7 @@ class ProfileRepository {
   Future<AuthUserModel> getProfile({
     required String userId,
     required String email,
+    required String username,
   }) async {
     Map<String, dynamic>? data;
     try {
@@ -22,19 +23,28 @@ class ProfileRepository {
       }
     }
 
-    if (data != null) return AuthUserModel.fromMap(data, email);
-
-    final legacyUser = await _supabase
+    final account = await _supabase
         .from('user')
-        .select('id_user, id_role, nama_lengkap')
+        .select('id_user, id_role, nama_lengkap, username, nisn, nip')
         .eq('id_user', userId)
         .maybeSingle();
-    if (legacyUser == null) {
+    if (account == null) {
       throw const AuthException(
         'Profil akun tidak ditemukan pada tabel profiles maupun user.',
       );
     }
 
-    return AuthUserModel.fromMap(legacyUser, email);
+    final roleUsername = switch ((account['id_role'] as num?)?.toInt()) {
+      3 => account['nisn'],
+      2 => account['nip'],
+      _ => account['username'],
+    };
+    final accountUsername =
+        (roleUsername ?? account['username'] ?? username).toString();
+    return AuthUserModel.fromMap({
+      ...?data,
+      ...account,
+      'username': accountUsername,
+    }, email, username: accountUsername);
   }
 }
