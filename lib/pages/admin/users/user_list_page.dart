@@ -29,7 +29,7 @@ class _UserListPageState extends State<UserListPage> {
   String? _error;
   List<UserModel> _users = [];
 
-  static const int _pageSize = 5;
+  static const int _pageSize = 10;
   static const String _allClasses = 'Kelas';
   static const String _allMajors = 'Jurusan';
   static const List<String> _nameOrderOptions = ['Nama A-Z', 'Nama Z-A'];

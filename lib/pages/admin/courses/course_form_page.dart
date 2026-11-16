@@ -13,10 +13,6 @@ class AdminCourseFormPage extends StatefulWidget {
 class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   static const int _studentsPerPage = 7;
 
-  // Isi daftar ini saat pilihan filter kelas dan jurusan sudah ditentukan.
-  static const List<String> _studentClassFilters = [];
-  static const List<String> _studentMajorFilters = [];
-
   final _formKey = GlobalKey<FormState>();
   final SupabaseClient _db = Supabase.instance.client;
 
@@ -58,6 +54,30 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   List<Map<String, dynamic>> get availableTeachers => _teachers;
 
   List<Map<String, dynamic>> get availableStudents => _students;
+
+  // Dibentuk dari data siswa yang dimuat, sehingga pilihan selalu mengikuti
+  // kelas dan jurusan yang benar-benar tersedia di database.
+  List<String> get _studentClassFilters {
+    final classes =
+        _students
+            .map((student) => _className(student).trim())
+            .where((className) => className.isNotEmpty && className != 'Siswa')
+            .toSet()
+            .toList()
+          ..sort();
+    return classes;
+  }
+
+  List<String> get _studentMajorFilters {
+    final majors =
+        _students
+            .map((student) => _majorForStudent(student).trim())
+            .where((major) => major.isNotEmpty && major != '-')
+            .toSet()
+            .toList()
+          ..sort();
+    return majors;
+  }
 
   bool _isActiveAccount(Map<String, dynamic>? account) {
     final status = account?['status'];
@@ -832,21 +852,75 @@ class SubjectSelector extends StatelessWidget {
   });
 
   static const List<String> _mainSubjects = [
-    'Matematika',
+    'Pendidikan Agama dan Budi Pekerti',
+    'Pendidikan Pancasila',
     'Bahasa Indonesia',
-    'KIK',
-    'Agama',
-    'Pendidikan Pancasila / Kewarganegaraan',
-    'Ilmu Pengetahuan Alam',
-    'Ilmu Pengetahuan Sosial',
+    'Matematika',
     'Bahasa Inggris',
+    'Pendidikan Jasmani, Olahraga, dan Kesehatan (PJOK)',
+    'Sejarah',
+    'Seni Budaya',
+    'Projek Kreatif dan Kewirausahaan (PKK)',
+    'Muatan Lokal',
   ];
 
   static const Map<String, List<String>> _majorSubjects = {
-    'RPL': ['Pemrograman'],
-    'TKJ': ['Jaringan'],
-    'Metro': ['Teknik Industri'],
-    'Elin': ['Kelistrikan'],
+    'RPL': [
+      'Dasar-Dasar Pengembangan Perangkat Lunak dan Gim (PPLG)',
+      'Algoritma dan Pemrograman',
+      'Pemrograman Berorientasi Objek (OOP)',
+      'Pemrograman Web',
+      'Pemrograman Mobile',
+      'Basis Data dan SQL',
+      'Desain UI/UX',
+      'Framework dan Library Pemrograman',
+      'Integrasi API dan Web Service',
+      'Pengujian Perangkat Lunak (Software Testing)',
+      'Pengembangan Aplikasi dan Sistem Informasi',
+      'Version Control (Git dan GitHub)',
+    ],
+    'TKJ': [
+      'Dasar-Dasar Teknik Jaringan Komputer dan Telekomunikasi',
+      'Perakitan dan Perawatan Komputer',
+      'Sistem Operasi',
+      'Dasar-Dasar Jaringan Komputer',
+      'Konfigurasi Router dan Switch',
+      'Administrasi Server',
+      'IP Addressing dan Subnetting',
+      'Jaringan Nirkabel (Wireless)',
+      'Keamanan Jaringan (Network Security)',
+      'Fiber Optic',
+      'Virtualisasi dan Cloud Computing',
+      'Troubleshooting Jaringan',
+    ],
+    'Mekatronika': [
+      'Dasar-Dasar Teknik Mekatronika',
+      'Gambar Teknik',
+      'Dasar-Dasar Teknik Mekanik',
+      'Dasar-Dasar Kelistrikan',
+      'Elektronika Dasar',
+      'Sistem Kendali dan Kontrol',
+      'Programmable Logic Controller (PLC)',
+      'Pneumatik dan Hidrolik',
+      'Sensor dan Aktuator',
+      'Sistem Otomasi Industri',
+      'Robotika',
+      'Perawatan dan Perbaikan Sistem Mekatronika',
+    ],
+    'Elektronika Industri': [
+      'Dasar-Dasar Teknik Elektronika',
+      'Komponen Elektronika',
+      'Rangkaian Elektronika Analog',
+      'Rangkaian Elektronika Digital',
+      'Pengukuran dan Pengujian Elektronika',
+      'Teknik Penyolderan dan Perakitan PCB',
+      'Mikrokontroler',
+      'Sensor dan Aktuator',
+      'Programmable Logic Controller (PLC)',
+      'Sistem Instrumentasi',
+      'Sistem Kendali Elektronika',
+      'Perawatan dan Perbaikan Peralatan Elektronika',
+    ],
   };
 
   @override
@@ -978,12 +1052,11 @@ class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
     if (filters == null) {
       filterItems = widget.items;
     } else if (selectedFilter == null) {
-      filterItems = [
-        ...widget.items,
-        ...filters.values.expand((subjects) => subjects),
-      ];
+      // Tab awal hanya berisi mapel umum. Mapel kejuruan tampil pada
+      // kategori jurusan yang dipilih.
+      filterItems = widget.items;
     } else {
-      filterItems = [...filters[selectedFilter] ?? const [], ...widget.items];
+      filterItems = filters[selectedFilter] ?? const [];
     }
     final items = {...filterItems, ...widget.extraItems}.toList();
 
@@ -1020,7 +1093,7 @@ class _SearchableOptionsSheetState extends State<_SearchableOptionsSheet> {
                   runSpacing: 4,
                   children: [
                     ChoiceChip(
-                      label: const Text('Mapel'),
+                      label: const Text('Mapel Umum'),
                       selected: selectedFilter == null,
                       onSelected: (_) => setState(() => selectedFilter = null),
                     ),
