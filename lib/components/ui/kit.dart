@@ -1,5 +1,6 @@
 import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
+import '../../core/routes/route_names.dart';
 import '../../core/utils/formatters.dart';
 
 class Ui {
@@ -80,6 +81,7 @@ class EduScaffold extends StatelessWidget {
   final Widget body;
   final Widget? bottom;
   final Widget? bottomBar;
+  final Widget? floatingActionButton;
   final bool scroll;
   final EdgeInsetsGeometry padding;
 
@@ -88,6 +90,7 @@ class EduScaffold extends StatelessWidget {
     required this.body,
     this.bottom,
     this.bottomBar,
+    this.floatingActionButton,
     this.scroll = true,
     this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 20),
   });
@@ -96,12 +99,12 @@ class EduScaffold extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Ui.bg,
     body: SafeArea(
-      bottom: bottom == null && bottomBar == null,
       child: scroll
           ? SingleChildScrollView(padding: padding, child: body)
           : Padding(padding: padding, child: body),
     ),
     bottomNavigationBar: bottomBar ?? bottom,
+    floatingActionButton: floatingActionButton,
   );
 }
 
@@ -918,6 +921,22 @@ class EduBottomNav extends StatefulWidget {
 
   @override
   State<EduBottomNav> createState() => _EduBottomNavState();
+}
+
+/// Tombol akses cepat ke asisten belajar yang dapat dipakai di dashboard
+/// setiap peran tanpa menyimpan API key di aplikasi Flutter.
+class EduAiAssistantButton extends StatelessWidget {
+  const EduAiAssistantButton({super.key});
+
+  @override
+  Widget build(BuildContext context) => FloatingActionButton.extended(
+    heroTag: 'eduvara-ai-assistant',
+    onPressed: () => Navigator.pushNamed(context, RouteNames.aiAssistant),
+    backgroundColor: Ui.blue,
+    foregroundColor: Colors.white,
+    icon: const Icon(Icons.auto_awesome),
+    label: const Text('Tanya AI'),
+  );
 }
 
 class _EduBottomNavState extends State<EduBottomNav> {

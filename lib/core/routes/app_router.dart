@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../pages/auth/login_page.dart';
 import '../../pages/auth/splash_page.dart';
-
+import '../../pages/ai/ai_chat_page.dart';
 import '../../pages/admin/admin_dashboard_page.dart';
 import '../../pages/admin/courses/course_detail_page.dart';
 import '../../pages/admin/courses/course_form_page.dart';
@@ -60,6 +60,7 @@ class AppRouter {
     // General
     RouteNames.splash => const SplashPage(),
     RouteNames.login => const LoginPage(),
+    RouteNames.aiAssistant => const AiChatPage(),
 
     // Admin
     RouteNames.adminDashboard => const AdminDashboardPage(),
@@ -78,8 +79,7 @@ class AppRouter {
     RouteNames.adminQuestionForm => const AdminQuestionFormPage(),
     RouteNames.adminNotifications => const AdminNotificationPage(),
     RouteNames.adminProfile => const AdminProfilePage(),
-    RouteNames.adminPasswordResetRequests =>
-      const PasswordResetRequestsPage(),
+    RouteNames.adminPasswordResetRequests => const PasswordResetRequestsPage(),
 
     // Teacher
     RouteNames.teacherDashboard => const TeacherDashboardPage(),

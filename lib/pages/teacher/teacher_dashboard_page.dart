@@ -292,6 +292,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
   @override
   Widget build(BuildContext context) => EduScaffold(
     bottom: const EduBottomNav(role: 'teacher', current: 0),
+    floatingActionButton: const EduAiAssistantButton(),
     body: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

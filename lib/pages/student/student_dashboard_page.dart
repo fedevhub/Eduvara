@@ -70,9 +70,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       if (!_isMissingTableError(e)) rethrow;
     }
     final name =
-        (profile?['full_name'] ??
-                user.userMetadata?['full_name'] ??
-                '-')
+        (profile?['full_name'] ?? user.userMetadata?['full_name'] ?? '-')
             .toString();
 
     try {
@@ -426,6 +424,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
   @override
   Widget build(BuildContext context) => EduScaffold(
     bottom: const EduBottomNav(role: 'student', current: 0),
+    floatingActionButton: const EduAiAssistantButton(),
     body: FutureBuilder<_DashData>(
       future: _data,
       builder: (context, snapshot) {

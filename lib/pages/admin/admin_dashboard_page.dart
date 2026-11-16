@@ -331,6 +331,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
   Widget build(BuildContext context) {
     return EduScaffold(
       bottom: const EduBottomNav(role: 'admin', current: 0),
+      floatingActionButton: const EduAiAssistantButton(),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -340,7 +341,10 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Dashboard Admin', style: TextStyle(fontSize: 11)),
+                    const Text(
+                      'Dashboard Admin',
+                      style: TextStyle(fontSize: 11),
+                    ),
                     Text(
                       _adminName,
                       maxLines: 1,

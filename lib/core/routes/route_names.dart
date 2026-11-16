@@ -2,6 +2,7 @@ class RouteNames {
   // General
   static const splash = '/';
   static const login = '/login';
+  static const aiAssistant = '/ai-assistant';
 
   // Admin
   static const adminDashboard = '/admin/dashboard';
