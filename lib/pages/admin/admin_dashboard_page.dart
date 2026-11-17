@@ -319,14 +319,6 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         '${time.month.toString().padLeft(2, '0')}/${time.year}';
   }
 
-  Widget _tappable(Widget child, String route) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _go(route),
-      child: child,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return EduScaffold(
@@ -405,26 +397,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             Row(
               children: [
                 Expanded(
-                  child: _tappable(
-                    StatBox(
-                      value: '$_totalSiswa',
-                      label: 'Total Siswa',
-                      icon: Icons.groups_outlined,
-                      tall: true,
-                    ),
-                    RouteNames.adminUsers,
+                  child: StatBox(
+                    value: '$_totalSiswa',
+                    label: 'Total Siswa',
+                    icon: Icons.groups_outlined,
+                    tall: true,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _tappable(
-                    StatBox(
-                      value: '$_totalGuru',
-                      label: 'Total Guru',
-                      icon: Icons.co_present_outlined,
-                      tall: true,
-                    ),
-                    RouteNames.adminUsers,
+                  child: StatBox(
+                    value: '$_totalGuru',
+                    label: 'Total Guru',
+                    icon: Icons.co_present_outlined,
+                    tall: true,
                   ),
                 ),
               ],
@@ -433,26 +419,20 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
             Row(
               children: [
                 Expanded(
-                  child: _tappable(
-                    StatBox(
-                      value: '$_totalKursus',
-                      label: 'Total Kursus',
-                      icon: Icons.menu_book_outlined,
-                      tall: true,
-                    ),
-                    RouteNames.adminCourses,
+                  child: StatBox(
+                    value: '$_totalKursus',
+                    label: 'Total Kursus',
+                    icon: Icons.menu_book_outlined,
+                    tall: true,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: _tappable(
-                    StatBox(
-                      value: '$_totalQuiz',
-                      label: 'Total Quiz',
-                      icon: Icons.fact_check_outlined,
-                      tall: true,
-                    ),
-                    RouteNames.adminQuizzes,
+                  child: StatBox(
+                    value: '$_totalQuiz',
+                    label: 'Total Quiz',
+                    icon: Icons.fact_check_outlined,
+                    tall: true,
                   ),
                 ),
               ],
@@ -463,15 +443,38 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Completion Rate',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'Completion Rate',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      if (_rates.length > 5)
+                        GestureDetector(
+                          onTap: () => _go(RouteNames.adminCourses),
+                          child: const Text(
+                            'Lihat Semua',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              color: Ui.blue,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   if (_rates.isEmpty)
                     const Text('Belum ada data kursus.')
-                  else
-                    for (final rate in _rates) _Rate(rate.title, rate.percent),
+                  else ...[
+                    for (final rate in _rates.take(5))
+                      _Rate(rate.title, rate.percent),
+                  ],
                 ],
               ),
             ),

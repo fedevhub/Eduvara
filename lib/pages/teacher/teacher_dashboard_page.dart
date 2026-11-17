@@ -109,7 +109,8 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
       final courseRows = await _db
           .from('courses')
           .select('id, title, status')
-          .eq('teacher_id', user.id);
+          .eq('teacher_id', user.id)
+          .order('created_at', ascending: true);
       final courses = List<Map<String, dynamic>>.from(courseRows);
       final courseIds = courses.map((c) => c['id'].toString()).toList();
 
@@ -308,9 +309,27 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
         else ...[
           _buildStats(),
           const SizedBox(height: 16),
-          const Text(
-            'Kursus Aktif',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Kursus Aktif',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (_activeCourses.length > 5)
+                GestureDetector(
+                  onTap: () => _go(RouteNames.teacherCourses),
+                  child: const Text(
+                    'Lihat Semua',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: Ui.blue,
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           if (_activeCourses.isEmpty)
@@ -322,7 +341,7 @@ class _TeacherDashboardPageState extends State<TeacherDashboardPage> {
               ),
             )
           else
-            for (final c in _activeCourses) ...[
+            for (final c in _activeCourses.take(5)) ...[
               _ActiveCourse(
                 title: c.title,
                 studentCount: c.studentCount,

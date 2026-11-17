@@ -14,10 +14,10 @@ class MaterialTextEditingController extends TextEditingController {
     r'^[ \t]*[-*+][ \t]+|^[ \t]*\d+\.[ \t]+|'
     r'!\[([^\]\n]*)\]\((https?://[^)\s]+)(?:\s+"[^"\n]*")?\)|'
     r'\[([^\]\n]+)\]\((https?://[^)\s]+)\)|'
-    r'\*\*|\*|<u>|</u>',
+    r'\*\*\*|\*\*|\*|<u>|</u>',
     multiLine: true,
   );
-  static final _formatMarker = RegExp(r'\*\*|\*|<u>|</u>');
+  static final _formatMarker = RegExp(r'\*\*\*|\*\*|\*|<u>|</u>');
 
   @override
   TextSpan buildTextSpan({
@@ -54,9 +54,16 @@ class MaterialTextEditingController extends TextEditingController {
       }
 
       final token = match.group(0)!;
-      if (token == '**' || token == '*' || token == '<u>' || token == '</u>') {
+      if (token == '***' ||
+          token == '**' ||
+          token == '*' ||
+          token == '<u>' ||
+          token == '</u>') {
         spans.add(_hiddenMarker(token, style));
         switch (token) {
+          case '***':
+            bold = !bold;
+            italic = !italic;
           case '**':
             bold = !bold;
           case '*':
@@ -174,6 +181,9 @@ class MaterialTextEditingController extends TextEditingController {
       final marker = match.group(0)!;
       spans.add(_hiddenMarker(marker, style));
       switch (marker) {
+        case '***':
+          bold = !bold;
+          italic = !italic;
         case '**':
           bold = !bold;
         case '*':
@@ -204,9 +214,13 @@ class MaterialTextEditingController extends TextEditingController {
 
   TextSpan _hiddenMarker(String marker, TextStyle? style) => TextSpan(
     text: marker,
-    style: style?.copyWith(
-      fontSize: 0.1,
-      height: 0.01,
+    style: (style ?? const TextStyle()).copyWith(
+      // Marker tetap berada di nilai controller agar posisi cursor tidak
+      // bergeser, tetapi ukurannya nol sehingga **/*/<u> tidak tampak seperti
+      // karakter kecil di awal teks yang sudah diberi format.
+      fontSize: 0,
+      letterSpacing: 0,
+      height: 0,
       color: Colors.transparent,
     ),
   );
@@ -274,6 +288,68 @@ class MaterialMarkdown extends StatelessWidget {
       if (href != null) unawaited(_openLink(context, href));
     },
   );
+}
+
+/// Tautan lampiran yang disimpan bersama materi. Dipakai di seluruh halaman
+/// detail agar file dan video tidak hilang di salah satu peran pengguna.
+class MaterialAttachments extends StatelessWidget {
+  final String? videoUrl;
+  final String? fileUrl;
+  final String? fileName;
+
+  const MaterialAttachments({
+    super.key,
+    this.videoUrl,
+    this.fileUrl,
+    this.fileName,
+  });
+
+  Future<void> _open(BuildContext context, String rawUrl) async {
+    final uri = Uri.tryParse(rawUrl.trim());
+    if (uri == null || !uri.hasScheme) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Tautan lampiran tidak valid.')),
+      );
+      return;
+    }
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Lampiran tidak dapat dibuka.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final video = videoUrl?.trim() ?? '';
+    final file = fileUrl?.trim() ?? '';
+    if (video.isEmpty && file.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (video.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: () => _open(context, video),
+            icon: const Icon(Icons.play_circle_outline),
+            label: const Text('Tonton video YouTube'),
+          ),
+        if (video.isNotEmpty && file.isNotEmpty) const SizedBox(height: 8),
+        if (file.isNotEmpty)
+          OutlinedButton.icon(
+            onPressed: () => _open(context, file),
+            icon: const Icon(Icons.attach_file),
+            label: Text(
+              fileName?.trim().isNotEmpty == true
+                  ? 'Buka ${fileName!.trim()}'
+                  : 'Buka file lampiran',
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 class _MaterialFormattingSyntax extends md.InlineSyntax {

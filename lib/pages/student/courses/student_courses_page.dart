@@ -11,7 +11,8 @@ class _CourseRow {
   final Course course;
   final _St status;
   final int pct;
-  const _CourseRow(this.course, this.status, this.pct);
+  final bool locked;
+  const _CourseRow(this.course, this.status, this.pct, {this.locked = false});
 }
 
 class StudentCoursesPage extends StatefulWidget {
@@ -114,15 +115,26 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     }
 
     final rows = <_CourseRow>[];
+    var previousCoursesComplete = true;
     for (final c in courses) {
       final cid = c.id.toString();
       final total =
           (totalByCourse[cid] ?? 0) + (totalQuizzesByCourse[cid] ?? 0);
       final done = (doneByCourse[cid] ?? 0) + (doneQuizByCourse[cid] ?? 0);
       final pct = total == 0 ? 0 : ((done / total) * 100).round();
+      // Course baru selesai bila seluruh materi/quiz yang tersedia benar-benar
+      // sudah dikerjakan. Course dengan progres 0% tetap berstatus berjalan.
       final isDone = total > 0 && done >= total;
 
-      rows.add(_CourseRow(c, isDone ? _St.done : _St.running, pct));
+      rows.add(
+        _CourseRow(
+          c,
+          isDone ? _St.done : _St.running,
+          pct,
+          locked: !previousCoursesComplete && !isDone,
+        ),
+      );
+      previousCoursesComplete = previousCoursesComplete && isDone;
     }
     return rows;
   }
@@ -141,7 +153,7 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     _ => true,
   };
 
-  Widget _card(Course course, _St st, int pct) {
+  Widget _card(Course course, _St st, int pct, {required bool locked}) {
     final color = switch (st) {
       _St.done => Ui.green,
       _St.running => Ui.blue,
@@ -149,14 +161,16 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
     final card = EduCard(
       borderColor: color,
       padding: const EdgeInsets.all(12),
-      onTap: () async {
-        await Navigator.pushNamed(
-          context,
-          RouteNames.studentCourseDetail,
-          arguments: {'course_id': course.id},
-        );
-        if (mounted) _reload();
-      },
+      onTap: locked
+          ? null
+          : () async {
+              await Navigator.pushNamed(
+                context,
+                RouteNames.studentCourseDetail,
+                arguments: {'course_id': course.id},
+              );
+              if (mounted) _reload();
+            },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -268,12 +282,23 @@ class _StudentCoursesPageState extends State<StudentCoursesPage> {
             }
             return Column(
               children: [
-                for (final r in visible) _card(r.course, r.status, r.pct),
+                for (final r in visible)
+                  r.locked
+                      ? _lockedCourseCard(r)
+                      : _card(r.course, r.status, r.pct, locked: false),
               ],
             );
           },
         ),
       ],
+    ),
+  );
+
+  Widget _lockedCourseCard(_CourseRow row) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: LockedCard(
+      text: 'Selesaikan course sebelumnya',
+      child: _card(row.course, row.status, row.pct, locked: true),
     ),
   );
 }

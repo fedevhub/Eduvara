@@ -33,7 +33,7 @@ class _AdminMaterialDetailPageState extends State<AdminMaterialDetailPage> {
   Future<Map<String, dynamic>> _load() async => Map<String, dynamic>.from(
     await _db
         .from('materials')
-        .select('title, description, content')
+        .select('title, description, content, video_url, file_url, file_name')
         .eq('id', _materialId!)
         .single(),
   );
@@ -92,6 +92,12 @@ class _AdminMaterialDetailPageState extends State<AdminMaterialDetailPage> {
                     MaterialMarkdown(
                       data: (material['content'] ?? '').toString(),
                       fontSize: 14,
+                    ),
+                    const SizedBox(height: 16),
+                    MaterialAttachments(
+                      videoUrl: material['video_url']?.toString(),
+                      fileUrl: material['file_url']?.toString(),
+                      fileName: material['file_name']?.toString(),
                     ),
                   ],
                 ),

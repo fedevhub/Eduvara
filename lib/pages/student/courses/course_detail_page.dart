@@ -65,7 +65,7 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
                 .from('materials')
                 .select()
                 .eq('course_id', _courseId!)
-                .order('order_no');
+                .order('created_at', ascending: true);
             return List<Map<String, dynamic>>.from(rows as List);
           } on PostgrestException catch (e) {
             if (e.code != 'PGRST205') rethrow;
@@ -147,11 +147,11 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
             .toList();
         final previousMaterials = await _db
             .from('materials')
-            .select('id')
+            .select('id, course_id')
             .inFilter('course_id', previousCourseIds);
         final previousQuizzes = await _db
             .from('quizzes')
-            .select('id')
+            .select('id, course_id')
             .inFilter('course_id', previousCourseIds)
             .eq('status', 'published');
         final previousMaterialIds = previousMaterials
@@ -185,9 +185,24 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
             attempts.map((row) => row['quiz_id'].toString()),
           );
         }
-        previousCoursesComplete =
-            previousMaterialIds.difference(completedMaterialIds).isEmpty &&
-            previousQuizIds.difference(completedQuizIds).isEmpty;
+        // Setiap course sebelumnya harus punya materi/quiz dan semuanya telah
+        // selesai. Dengan begitu course kosong atau progres 0% tidak keliru
+        // dianggap selesai dan tidak membuka course berikutnya.
+        previousCoursesComplete = previousCourseIds.every((courseId) {
+          final materialIds = previousMaterials
+              .where((row) => row['course_id'].toString() == courseId)
+              .map((row) => row['id'].toString());
+          final quizIds = previousQuizzes
+              .where((row) => row['course_id'].toString() == courseId)
+              .map((row) => row['id'].toString());
+          final assignmentIds = {...materialIds, ...quizIds};
+          return assignmentIds.isNotEmpty &&
+              assignmentIds.every(
+                (assignmentId) =>
+                    completedMaterialIds.contains(assignmentId) ||
+                    completedQuizIds.contains(assignmentId),
+              );
+        });
       }
 
       if (!mounted) return;
@@ -318,7 +333,9 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
               text: tab == 0
                   ? _previousCoursesComplete
                         ? 'Selesaikan Materi Sebelumnya'
-                        : 'Materi terkunci sampai course sebelumnya selesai'
+                        : 'Course terkunci sampai course sebelumnya selesai'
+                  : !_previousCoursesComplete
+                  ? 'Course terkunci sampai course sebelumnya selesai'
                   : 'Selesaikan Quiz Sebelumnya',
               child: card,
             ),
@@ -400,7 +417,13 @@ class _StudentCourseDetailPageState extends State<StudentCourseDetailPage> {
       ];
     }
     if (_quizzes.isEmpty) return [_empty('Belum ada quiz')];
-    final st = _states(_quizzes, _doneQuizzes);
+    final sequenceStates = _states(_quizzes, _doneQuizzes);
+    final st = _previousCoursesComplete
+        ? sequenceStates
+        : [
+            for (final state in sequenceStates)
+              _ItemState(state.done, state.done),
+          ];
     return [
       for (var i = 0; i < _quizzes.length; i++)
         _item(

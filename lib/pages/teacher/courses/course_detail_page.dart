@@ -203,7 +203,7 @@ class _TeacherCourseDetailPageState extends State<TeacherCourseDetailPage> {
             .from('materials')
             .select()
             .eq('course_id', _courseId!)
-            .order('order_no'),
+            .order('created_at', ascending: true),
       );
       final quizRows = List<Map<String, dynamic>>.from(
         await _db

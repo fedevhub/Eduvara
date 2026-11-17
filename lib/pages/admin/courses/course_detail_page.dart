@@ -140,7 +140,8 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
       final materialData = await _supabase
           .from('materials')
           .select()
-          .eq('course_id', id);
+          .eq('course_id', id)
+          .order('created_at', ascending: true);
 
       final enrollmentData = await _supabase
           .from('enrollments')
@@ -524,45 +525,53 @@ class _AdminCourseDetailPageState extends State<AdminCourseDetailPage> {
         padding: const EdgeInsets.only(bottom: 8),
         child: EduCard(
           padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Ui.blueTint,
-                  borderRadius: BorderRadius.circular(9),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.pushNamed(
+              context,
+              RouteNames.adminMaterialDetail,
+              arguments: _materials[index].id,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: Ui.blueTint,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(
+                    Icons.description_outlined,
+                    color: Ui.blue,
+                    size: 20,
+                  ),
                 ),
-                child: const Icon(
-                  Icons.description_outlined,
-                  color: Ui.blue,
-                  size: 20,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _materials[index].title.isEmpty
-                          ? 'Materi ${index + 1}'
-                          : _materials[index].title,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _materials[index].title.isEmpty
+                            ? 'Materi ${index + 1}'
+                            : _materials[index].title,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
-                    ),
-                    Text(
-                      _materials[index].content,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 8.5, color: Ui.muted),
-                    ),
-                  ],
+                      Text(
+                        _materials[index].content,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 8.5, color: Ui.muted),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

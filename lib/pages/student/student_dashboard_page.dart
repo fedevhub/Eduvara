@@ -12,7 +12,14 @@ class _CourseInfo {
   final _St status;
   final int total;
   final int pct;
-  const _CourseInfo(this.course, this.status, this.total, this.pct);
+  final bool locked;
+  const _CourseInfo(
+    this.course,
+    this.status,
+    this.total,
+    this.pct, {
+    this.locked = false,
+  });
 }
 
 class _DashData {
@@ -165,6 +172,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     }
 
     final infos = <_CourseInfo>[];
+    var previousCoursesComplete = true;
     for (final c in courses) {
       final cid = c.id.toString();
       final totalMaterials = totalByCourse[cid] ?? 0;
@@ -174,8 +182,15 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
       final isDone = total > 0 && done >= total;
 
       infos.add(
-        _CourseInfo(c, isDone ? _St.done : _St.running, totalMaterials, pct),
+        _CourseInfo(
+          c,
+          isDone ? _St.done : _St.running,
+          totalMaterials,
+          pct,
+          locked: !previousCoursesComplete && !isDone,
+        ),
       );
+      previousCoursesComplete = previousCoursesComplete && isDone;
     }
     return _DashData(name, infos);
   }
@@ -203,62 +218,69 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
     ),
   );
 
-  Widget _runningCard(_CourseInfo info) => EduCard(
-    borderColor: Ui.blue,
-    padding: const EdgeInsets.all(12),
-    onTap: () async {
-      await Navigator.pushNamed(
-        context,
-        RouteNames.studentCourseDetail,
-        arguments: {'course_id': info.course.id},
-      );
-      // refresh progress setelah kembali dari detail
-      if (mounted) _reload();
-    },
-    child: Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                info.course.title,
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
+  Widget _runningCard(_CourseInfo info) {
+    final card = EduCard(
+      borderColor: Ui.blue,
+      padding: const EdgeInsets.all(12),
+      onTap: info.locked
+          ? null
+          : () async {
+              await Navigator.pushNamed(
+                context,
+                RouteNames.studentCourseDetail,
+                arguments: {'course_id': info.course.id},
+              );
+              // refresh progress setelah kembali dari detail
+              if (mounted) _reload();
+            },
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  info.course.title,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              ),
-              Text(
-                '${info.course.teacher} • ${info.total} Materi',
-                style: const TextStyle(fontSize: 8.5),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${info.pct}% Selesai',
-                style: const TextStyle(
-                  fontSize: 8,
-                  fontWeight: FontWeight.w600,
-                  color: Ui.blue,
+                Text(
+                  '${info.course.teacher} • ${info.total} Materi',
+                  style: const TextStyle(fontSize: 8.5),
                 ),
-              ),
-              const SizedBox(height: 3),
-              ProgressLine(value: info.pct / 100),
-            ],
+                const SizedBox(height: 8),
+                Text(
+                  '${info.pct}% Selesai',
+                  style: const TextStyle(
+                    fontSize: 8,
+                    fontWeight: FontWeight.w600,
+                    color: Ui.blue,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                ProgressLine(value: info.pct / 100),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Container(
-          width: 30,
-          height: 30,
-          decoration: BoxDecoration(
-            color: Ui.blue,
-            borderRadius: BorderRadius.circular(8),
+          const SizedBox(width: 12),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: Ui.blue,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
           ),
-          child: const Icon(Icons.play_arrow, color: Colors.white, size: 18),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+    return info.locked
+        ? LockedCard(text: 'Selesaikan course sebelumnya', child: card)
+        : card;
+  }
 
   Widget _message(String text) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -310,7 +332,7 @@ class _StudentDashboardPageState extends State<StudentDashboardPage> {
 
   Widget _content(_DashData d) {
     final running = d.courses
-        .where((course) => course.status == _St.running)
+        .where((course) => course.status == _St.running && !course.locked)
         .toList();
 
     return Column(

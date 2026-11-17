@@ -63,7 +63,7 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
           await _db
               .from('materials')
               .select(
-                'id, title, description, content, summary, file_name, file_size',
+                'id, title, description, content, summary, file_name, file_size, file_url, video_url',
               )
               .eq('id', _materialId!)
               .single(),
@@ -320,6 +320,17 @@ class _StudentMaterialDetailPageState extends State<StudentMaterialDetailPage> {
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                  if ((_material!['video_url']?.toString().trim().isNotEmpty ??
+                          false) ||
+                      (_material!['file_url']?.toString().trim().isNotEmpty ??
+                          false)) ...[
+                    const SizedBox(height: 12),
+                    MaterialAttachments(
+                      videoUrl: _material!['video_url']?.toString(),
+                      fileUrl: _material!['file_url']?.toString(),
+                      fileName: fileName,
                     ),
                   ],
                 ],

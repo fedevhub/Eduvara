@@ -29,7 +29,7 @@ class CourseRepository {
         )
         .inFilter('id', courseIds)
         .eq('status', 'active')
-        .order('created_at')
+        .order('created_at', ascending: true)
         .order('title');
     final courses = List<Map<String, dynamic>>.from(courseRows);
 

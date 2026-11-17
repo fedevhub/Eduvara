@@ -16,11 +16,13 @@ class CourseListPage extends StatefulWidget {
 }
 
 class _CourseListPageState extends State<CourseListPage> {
+  static const _pageSize = 10;
   final SupabaseClient _db = Supabase.instance.client;
 
   List<Map<String, dynamic>> _courses = [];
   Map<String, String> _teacherNames = {}; // id profil -> nama
   String query = '';
+  int _page = 0;
   bool _loading = true;
   String? _error;
 
@@ -95,7 +97,7 @@ class _CourseListPageState extends State<CourseListPage> {
       });
     }
 
-    try { 
+    try {
       final results = await Future.wait([
         _db.from(_tCourse).select('*'),
         _db.from('enrollments').select('course_id, student_id'),
@@ -324,7 +326,13 @@ class _CourseListPageState extends State<CourseListPage> {
   @override
   Widget build(BuildContext context) {
     final q = query.toLowerCase();
-    final items = _courses.where((c) => _title(c).toLowerCase().contains(q));
+    final items = _courses
+        .where((c) => _title(c).toLowerCase().contains(q))
+        .toList();
+    final pageCount = (items.length / _pageSize).ceil();
+    final currentPage = pageCount == 0 ? 0 : _page.clamp(0, pageCount - 1);
+    final start = currentPage * _pageSize;
+    final pageItems = items.skip(start).take(_pageSize).toList();
 
     return EduScaffold(
       bottom: const EduBottomNav(role: 'admin', current: 2),
@@ -337,7 +345,10 @@ class _CourseListPageState extends State<CourseListPage> {
           SearchBox(
             hint: 'Cari Course',
             pill: true,
-            onChanged: (v) => setState(() => query = v),
+            onChanged: (v) => setState(() {
+              query = v;
+              _page = 0;
+            }),
           ),
           const SizedBox(height: 12),
           if (_loading)
@@ -364,7 +375,7 @@ class _CourseListPageState extends State<CourseListPage> {
               child: Center(child: Text('Belum ada course.')),
             )
           else
-            for (final c in items)
+            for (final c in pageItems)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: EduCard(
@@ -437,6 +448,33 @@ class _CourseListPageState extends State<CourseListPage> {
                   ),
                 ),
               ),
+          if (pageCount > 1)
+            Padding(
+              padding: const EdgeInsets.only(top: 4, bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconButton(
+                    tooltip: 'Halaman sebelumnya',
+                    onPressed: currentPage == 0
+                        ? null
+                        : () => setState(() => _page = currentPage - 1),
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  Text(
+                    'Halaman ${currentPage + 1} dari $pageCount',
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                  IconButton(
+                    tooltip: 'Halaman berikutnya',
+                    onPressed: currentPage >= pageCount - 1
+                        ? null
+                        : () => setState(() => _page = currentPage + 1),
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );

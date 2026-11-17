@@ -10,7 +10,7 @@ class MateriRepository {
         .from('materials')
         .select('id, course_id, title, content')
         .eq('course_id', courseId)
-        .order('order_no');
+        .order('created_at', ascending: true);
 
     return List<Map<String, dynamic>>.from(rows)
         .map(
