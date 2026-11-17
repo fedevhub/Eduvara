@@ -21,6 +21,24 @@ class _UserFormPageState extends State<UserFormPage> {
   final password = TextEditingController();
   final kelas = TextEditingController();
 
+  @override
+  void initState() {
+    super.initState();
+    kelas.addListener(() => _autoUppercase(kelas));
+  }
+
+  void _autoUppercase(TextEditingController controller) {
+    final text = controller.text;
+    final upper = text.toUpperCase();
+    if (text == upper) return;
+
+    controller.value = controller.value.copyWith(
+      text: upper,
+      selection: TextSelection.collapsed(offset: upper.length),
+      composing: TextRange.empty,
+    );
+  }
+
   static const Map<String, String> _roleValues = {
     'Siswa': 'student',
     'Guru': 'teacher',

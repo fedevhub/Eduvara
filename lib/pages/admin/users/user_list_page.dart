@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../components/common/student_filter_panel.dart';
 import '../../../components/ui/kit.dart';
 import '../../../core/routes/route_names.dart';
 import '../../../models/user_model.dart';
@@ -30,9 +31,21 @@ class _UserListPageState extends State<UserListPage> {
   List<UserModel> _users = [];
 
   static const int _pageSize = 10;
-  static const String _allClasses = 'Kelas';
-  static const String _allMajors = 'Jurusan';
-  static const List<String> _nameOrderOptions = ['Nama A-Z', 'Nama Z-A'];
+  static const List<String> _studentClassOptions = ['X', 'XI', 'XII'];
+  static const List<String> _studentMajorOptions = [
+    'RPL A',
+    'RPL B',
+    'RPL C',
+    'RPL D',
+    'TKJ A',
+    'TKJ B',
+    'TKJ C',
+    'TKJ D',
+    'METRO A',
+    'METRO B',
+    'ELIN A',
+    'ELIN B',
+  ];
 
   @override
   void initState() {
@@ -65,6 +78,28 @@ class _UserListPageState extends State<UserListPage> {
 
   int _count(String role) => _users.where((u) => u.role == role).length;
 
+  String? _classValue(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final upper = raw.trim().toUpperCase();
+
+    final romanMatch = RegExp(r'XII|XI|X').firstMatch(upper);
+    if (romanMatch != null) return romanMatch.group(0);
+
+    final numericMatch = RegExp(r'\d+').stringMatch(upper);
+    if (numericMatch == null || numericMatch.isEmpty) return null;
+
+    switch (numericMatch) {
+      case '10':
+        return 'X';
+      case '11':
+        return 'XI';
+      case '12':
+        return 'XII';
+      default:
+        return null;
+    }
+  }
+
   List<UserModel> get _filteredUsers {
     final role = _roles[tab];
     final q = query.trim().toLowerCase();
@@ -76,10 +111,12 @@ class _UserListPageState extends State<UserListPage> {
         return false;
       }
       if (role == 'student') {
-        if (_classFilter != null && u.kelas?.trim() != _classFilter) {
+        final classValue = _classValue(u.kelas);
+        if (_classFilter != null && classValue != _classFilter) {
           return false;
         }
-        if (_majorFilter != null && u.jurusan != _majorFilter) {
+        if (_majorFilter != null &&
+            (u.jurusan ?? '').toUpperCase() != _majorFilter!.toUpperCase()) {
           return false;
         }
       }
@@ -100,29 +137,9 @@ class _UserListPageState extends State<UserListPage> {
     return users;
   }
 
-  List<String> get _classOptions {
-    final options =
-        _users
-            .where((user) => user.role == 'student')
-            .map((user) => user.kelas?.trim() ?? '')
-            .where((kelas) => kelas.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    return options;
-  }
+  List<String> get _classOptions => List.unmodifiable(_studentClassOptions);
 
-  List<String> get _majorOptions {
-    final options =
-        _users
-            .where((user) => user.role == 'student')
-            .map((user) => user.jurusan ?? '')
-            .where((major) => major.isNotEmpty)
-            .toSet()
-            .toList()
-          ..sort();
-    return options;
-  }
+  List<String> get _majorOptions => List.unmodifiable(_studentMajorOptions);
 
   String _info(UserModel u) {
     if (u.role == 'student') {
@@ -231,54 +248,20 @@ class _UserListPageState extends State<UserListPage> {
     );
   }
 
-  Widget _filters() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      const Text(
-        'Filter siswa',
-        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-      ),
-      const SizedBox(height: 6),
-      Row(
-        children: [
-          Expanded(
-            child: EduSelect(
-              hint: _allClasses,
-              value: _classFilter ?? _allClasses,
-              items: [_allClasses, ..._classOptions],
-              onChanged: (value) => setState(() {
-                _classFilter = value == _allClasses ? null : value;
-                _pageIndex = 0;
-              }),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: EduSelect(
-              hint: _allMajors,
-              value: _majorFilter ?? _allMajors,
-              items: [_allMajors, ..._majorOptions],
-              onChanged: (value) => setState(() {
-                _majorFilter = value == _allMajors ? null : value;
-                _pageIndex = 0;
-              }),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: EduSelect(
-              hint: 'Urutkan nama',
-              value: _nameOrder,
-              items: _nameOrderOptions,
-              onChanged: (value) => setState(() {
-                _nameOrder = value ?? 'Nama A-Z';
-                _pageIndex = 0;
-              }),
-            ),
-          ),
-        ],
-      ),
-    ],
+  Widget _filters() => StudentFilterPanel(
+    classOptions: _classOptions,
+    majorOptions: _majorOptions,
+    selectedClass: _classFilter,
+    selectedMajor: _majorFilter,
+    sortOrder: _nameOrder == 'Nama Z-A' ? 'Z-A' : 'A-Z',
+    onApply: (selectedClass, selectedMajor, sortOrder) {
+      setState(() {
+        _classFilter = selectedClass;
+        _majorFilter = selectedMajor;
+        _nameOrder = sortOrder == 'Z-A' ? 'Nama Z-A' : 'Nama A-Z';
+        _pageIndex = 0;
+      });
+    },
   );
 
   Widget _userCard(UserModel u) {

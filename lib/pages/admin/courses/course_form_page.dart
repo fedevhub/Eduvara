@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../components/common/student_filter_panel.dart';
 import '../../../components/ui/kit.dart';
 
 class AdminCourseFormPage extends StatefulWidget {
@@ -57,27 +58,22 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
   // Dibentuk dari data siswa yang dimuat, sehingga pilihan selalu mengikuti
   // kelas dan jurusan yang benar-benar tersedia di database.
-  List<String> get _studentClassFilters {
-    final classes =
-        _students
-            .map((student) => _className(student).trim())
-            .where((className) => className.isNotEmpty && className != 'Siswa')
-            .toSet()
-            .toList()
-          ..sort();
-    return classes;
-  }
+  static const List<String> _studentClassFilters = ['X', 'XI', 'XII'];
 
-  List<String> get _studentMajorFilters {
-    final majors =
-        _students
-            .map((student) => _majorForStudent(student).trim())
-            .where((major) => major.isNotEmpty && major != '-')
-            .toSet()
-            .toList()
-          ..sort();
-    return majors;
-  }
+  static const List<String> _studentMajorFilters = [
+    'RPL A',
+    'RPL B',
+    'RPL C',
+    'RPL D',
+    'TKJ A',
+    'TKJ B',
+    'TKJ C',
+    'TKJ D',
+    'METRO A',
+    'METRO B',
+    'ELIN A',
+    'ELIN B',
+  ];
 
   bool _isActiveAccount(Map<String, dynamic>? account) {
     final status = account?['status'];
@@ -103,7 +99,7 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
           major.contains(query);
       final matchesClass =
           _selectedStudentClass == null ||
-          _className(user) == _selectedStudentClass;
+          _normalizedClassValue(_className(user)) == _selectedStudentClass;
       final matchesMajor =
           _selectedStudentMajor == null ||
           _majorForStudent(user).toUpperCase() ==
@@ -137,6 +133,28 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
   String _className(Map<String, dynamic> student) =>
       (student['class_name'] ?? student['grade_level'] ?? 'Siswa').toString();
 
+  String _normalizedClassValue(String? className) {
+    final upper = (className ?? '').trim().toUpperCase();
+    if (upper.isEmpty) return '';
+
+    final romanMatch = RegExp(r'XII|XI|X').firstMatch(upper);
+    if (romanMatch != null) return romanMatch.group(0)!;
+
+    final digits = RegExp(r'\d+').stringMatch(upper);
+    if (digits == null || digits.isEmpty) return '';
+
+    switch (digits) {
+      case '10':
+        return 'X';
+      case '11':
+        return 'XI';
+      case '12':
+        return 'XII';
+      default:
+        return '';
+    }
+  }
+
   String _majorForStudent(Map<String, dynamic> student) {
     final className = _className(student).trim();
     if (className.isEmpty || className == 'Siswa') return '-';
@@ -163,48 +181,6 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
     });
     final major = majorParts.join(' ');
     return major.isEmpty ? '-' : major;
-  }
-
-  Widget _studentFilterDropdown({
-    required String hint,
-    required String? value,
-    required List<String> options,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return DropdownButtonFormField<String>(
-      value: value,
-      isExpanded: true,
-      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Ui.muted),
-      style: const TextStyle(fontSize: 14, color: Ui.text),
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 16,
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Ui.line),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Ui.blue, width: 1.5),
-        ),
-      ),
-      hint: Text(hint, style: const TextStyle(fontSize: 14, color: Ui.text)),
-      items: [
-        DropdownMenuItem<String>(value: null, child: Text(hint)),
-        ...options.map(
-          (option) => DropdownMenuItem<String>(
-            value: option,
-            child: Text(option, overflow: TextOverflow.ellipsis),
-          ),
-        ),
-      ],
-      onChanged: onChanged,
-    );
   }
 
   void _updateStudentFilter(VoidCallback update) {
@@ -652,53 +628,23 @@ class _AdminCourseFormPageState extends State<AdminCourseFormPage> {
 
                           const SizedBox(height: 14),
 
-                          const Text(
-                            'Filter siswa',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: Ui.text,
-                            ),
-                          ),
-
-                          const SizedBox(height: 8),
-
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _studentFilterDropdown(
-                                  hint: 'Kelas',
-                                  value: _selectedStudentClass,
-                                  options: _studentClassFilters,
-                                  onChanged: (value) => _updateStudentFilter(
-                                    () => _selectedStudentClass = value,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _studentFilterDropdown(
-                                  hint: 'Jurusan',
-                                  value: _selectedStudentMajor,
-                                  options: _studentMajorFilters,
-                                  onChanged: (value) => _updateStudentFilter(
-                                    () => _selectedStudentMajor = value,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _studentFilterDropdown(
-                                  hint: 'Urutkan nama',
-                                  value: _studentNameOrder,
-                                  options: const ['Nama A-Z', 'Nama Z-A'],
-                                  onChanged: (value) => _updateStudentFilter(
-                                    () =>
-                                        _studentNameOrder = value ?? 'Nama A-Z',
-                                  ),
-                                ),
-                              ),
-                            ],
+                          StudentFilterPanel(
+                            classOptions: _studentClassFilters,
+                            majorOptions: _studentMajorFilters,
+                            selectedClass: _selectedStudentClass,
+                            selectedMajor: _selectedStudentMajor,
+                            sortOrder: _studentNameOrder == 'Nama Z-A'
+                                ? 'Z-A'
+                                : 'A-Z',
+                            onApply: (selectedClass, selectedMajor, sortOrder) {
+                              _updateStudentFilter(() {
+                                _selectedStudentClass = selectedClass;
+                                _selectedStudentMajor = selectedMajor;
+                                _studentNameOrder = sortOrder == 'Z-A'
+                                    ? 'Nama Z-A'
+                                    : 'Nama A-Z';
+                              });
+                            },
                           ),
 
                           const SizedBox(height: 10),
