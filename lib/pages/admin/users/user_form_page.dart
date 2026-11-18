@@ -246,7 +246,7 @@ class _UserFormPageState extends State<UserFormPage> {
                     'student' => 'Masukkan NISN siswa',
                     'teacher' => 'Masukkan NIP guru',
                     'admin' => 'Tentukan username admin',
-                    _ => 'Pilih role, lalu masukkan username',
+                    _ => 'Masukkan username',
                   },
                   error: _showErrors && _vUsername() != null,
                 ),
